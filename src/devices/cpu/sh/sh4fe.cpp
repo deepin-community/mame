@@ -2,7 +2,7 @@
 // copyright-holders:R. Belmont, David Haywood
 /***************************************************************************
 
-    sh4fe.c
+    sh4fe.cpp
 
     Front end for SH-4 recompiler
 
@@ -24,14 +24,6 @@ sh4_frontend::sh4_frontend(sh_common_execution *device, uint32_t window_start, u
 }
 
 uint16_t sh4_frontend::read_word(opcode_desc &desc)
-{
-	if (desc.physpc >= 0xe0000000)
-		return m_sh->m_pr16(desc.physpc);
-
-	return m_sh->m_pr16(desc.physpc & SH34_AM);
-}
-
-uint16_t sh4be_frontend::read_word(opcode_desc &desc)
 {
 	if (desc.physpc >= 0xe0000000)
 		return m_sh->m_pr16(desc.physpc);
@@ -291,8 +283,10 @@ bool sh4_frontend::describe_op1111_0x13(opcode_desc &desc, const opcode_desc *pr
 
 bool sh4_frontend::describe_op1111_0xf13(opcode_desc &desc, const opcode_desc *prev, uint16_t opcode)
 {
-	if (opcode & 0x100) {
-		if (opcode & 0x200) {
+	if (opcode & 0x100)
+	{
+		if (opcode & 0x200)
+		{
 			switch (opcode & 0xC00)
 			{
 			case 0x000:
@@ -306,11 +300,13 @@ bool sh4_frontend::describe_op1111_0xf13(opcode_desc &desc, const opcode_desc *p
 				break;
 			}
 		}
-		else {
+		else
+		{
 			return true; // FTRV(opcode);
 		}
 	}
-	else {
+	else
+	{
 		return true; // FSSCA(opcode);
 	}
 	return false;

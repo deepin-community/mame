@@ -9,8 +9,6 @@
 #include "emu.h"
 #include "rsp.h"
 
-#include "debugger.h"
-
 #include "rspdefs.h"
 #include "rspdiv.h"
 
@@ -124,9 +122,9 @@ rsp_device::rsp_device(const machine_config &mconfig, const char *tag, device_t 
 	, m_pc_temp(0)
 	, m_ppc_temp(0)
 	, m_nextpc_temp(0xffff)
-	, m_dp_reg_r_func(*this)
+	, m_dp_reg_r_func(*this, 0)
 	, m_dp_reg_w_func(*this)
-	, m_sp_reg_r_func(*this)
+	, m_sp_reg_r_func(*this, 0)
 	, m_sp_reg_w_func(*this)
 	, m_sp_set_status_func(*this)
 {
@@ -211,7 +209,7 @@ void rsp_device::set_cop0_reg(int reg, uint32_t data)
 
 void rsp_device::unimplemented_opcode(uint32_t op)
 {
-	if ((machine().debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if (debugger_enabled())
 	{
 		std::ostringstream string;
 		rsp_disassembler rspd;
@@ -254,15 +252,6 @@ void rsp_device::unimplemented_opcode(uint32_t op)
 
 /*****************************************************************************/
 
-void rsp_device::resolve_cb()
-{
-	m_dp_reg_r_func.resolve();
-	m_dp_reg_w_func.resolve();
-	m_sp_reg_r_func.resolve();
-	m_sp_reg_w_func.resolve();
-	m_sp_set_status_func.resolve();
-}
-
 void rsp_device::device_start()
 {
 	if (LOG_INSTRUCTION_EXECUTION)
@@ -272,7 +261,6 @@ void rsp_device::device_start()
 	space(AS_PROGRAM).specific(m_imem);
 	space(AS_DATA).cache(m_dcache);
 	space(AS_DATA).specific(m_dmem);
-	resolve_cb();
 
 	for (int regIdx = 0; regIdx < 32; regIdx++)
 		m_r[regIdx] = 0;
@@ -2246,8 +2234,7 @@ void rsp_device::handle_lwc2(uint32_t op)
 	int base = (op >> 21) & 0x1f;
 	int dest = (op >> 16) & 0x1f;
 	int index = (op >> 7) & 0xf;
-	int offset = (op & 0x7f);
-	offset = (offset << 25) >> 25;
+	int offset = util::sext(op & 0x7f, 7);
 
 	switch ((op >> 11) & 0x1f)
 	{
@@ -2520,8 +2507,7 @@ void rsp_device::handle_swc2(uint32_t op)
 	int base = (op >> 21) & 0x1f;
 	int dest = (op >> 16) & 0x1f;
 	int index = (op >> 7) & 0xf;
-	int offset = (op & 0x7f);
-	offset = (offset << 25) >> 25;
+	int offset = util::sext(op & 0x7f, 7);
 
 	switch ((op >> 11) & 0x1f)
 	{
@@ -2854,6 +2840,7 @@ void rsp_device::execute_run()
 {
 	if (m_sr & (RSP_STATUS_HALT | RSP_STATUS_BROKE))
 	{
+		debugger_wait_hook();
 		m_ideduct = 0;
 		m_scalar_busy = false;
 		m_vector_busy = false;

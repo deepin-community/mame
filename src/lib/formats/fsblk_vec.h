@@ -3,31 +3,34 @@
 
 // Block device on vector<uint8_t>
 
-#include "fsmgr.h"
+#include "fsblk.h"
+
+namespace fs {
 
 class fsblk_vec_t : public fsblk_t {
 private:
-	class blk_t : public iblock_t {
+	class blk_t : public block_t {
 	public:
-		blk_t(uint8_t *data, uint32_t size) : iblock_t(size), m_data(data) {}
+		blk_t(u8 *data, u32 size) : block_t(size), m_data(data) {}
 		virtual ~blk_t() = default;
 
-		virtual const uint8_t *rodata() override;
-		virtual uint8_t *data() override;
-		virtual void drop_weak_references() override;
+		virtual const u8 *rodata() const override;
+		virtual u8 *data() override;
 
 	private:
-		uint8_t *m_data;
+		u8 *m_data;
 	};
 
 public:
-	fsblk_vec_t(std::vector<uint8_t> &data) : m_data(data) {}
+	fsblk_vec_t(std::vector<u8> &data) : m_data(data) {}
 	virtual ~fsblk_vec_t() = default;
 
-	virtual uint32_t block_count() const override;
-	virtual block_t get(uint32_t id) override;
-	virtual void fill(uint8_t data) override;
+	virtual u32 block_count() const override;
+	virtual block_t::ptr get(u32 id) override;
+	virtual void fill_all(u8 data) override;
 
 private:
-	std::vector<uint8_t> &m_data;
+	std::vector<u8> &m_data;
 };
+
+} // namespace fs
