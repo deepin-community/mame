@@ -4,7 +4,7 @@
 
  Super NES/Famicom Event cartridges emulation (for SNES/SFC)
 
- TODO: figure out how the Test Mode switch works...
+ TODO: Figure out how the Test Mode switch works
 
  ***********************************************************************************************************/
 
@@ -38,7 +38,7 @@ void sns_pfest94_device::device_start()
 {
 	m_dsp_prg.resize(0x2000/sizeof(uint32_t));
 	m_dsp_data.resize(0x800/sizeof(uint16_t));
-	pfest94_timer = timer_alloc(TIMER_EVENT);
+	pfest94_timer = timer_alloc(FUNC(sns_pfest94_device::event_tick), this);
 	pfest94_timer->reset();
 
 	save_item(NAME(m_base_bank));
@@ -102,7 +102,7 @@ uint8_t sns_pfest94_device::read_h(offs_t offset)
 }
 
 
-// these are used for two diff effects: both to select game from menu and to access the DSP when running SMK!
+// these are used both to select game from the menu and to access the DSP when running Super Mario Kart.
 uint8_t sns_pfest94_device::chip_read(offs_t offset)
 {
 	if (offset & 0x8000)
@@ -113,8 +113,10 @@ uint8_t sns_pfest94_device::chip_read(offs_t offset)
 	else
 	{
 		// DSP access
-		offset &= 0x1fff;
-		return m_upd7725->snesdsp_read(offset < 0x1000);
+		if (BIT(offset, 12))
+			return m_upd7725->status_r();
+		else
+			return m_upd7725->data_r();
 	}
 }
 
@@ -151,8 +153,10 @@ void sns_pfest94_device::chip_write(offs_t offset, uint8_t data)
 	else
 	{
 		// DSP access
-		offset &= 0x1fff;
-		m_upd7725->snesdsp_write(offset < 0x1000, data);
+		if (BIT(~offset, 12))
+			m_upd7725->data_w(data);
+		else
+			logerror("%s: Writing DSP status to %02x, ignored", machine().describe_context(), data);
 	}
 }
 
@@ -166,6 +170,7 @@ inline uint32_t get_prg(uint8_t *CPU, uint32_t addr)
 {
 	return ((CPU[addr * 4] << 24) | (CPU[addr * 4 + 1] << 16) | (CPU[addr * 4 + 2] << 8) | 0x00);
 }
+
 inline uint16_t get_data(uint8_t *CPU, uint32_t addr)
 {
 	return ((CPU[addr * 2] << 8) | CPU[addr * 2 + 1]);
@@ -183,7 +188,7 @@ void sns_pfest94_device::speedup_addon_bios_access()
 }
 
 
-// DSP dump contains prg at offset 0 and data at offset 0x2000
+// DSP dump contains program code at offset 0 and data at offset 0x2000
 uint32_t sns_pfest94_device::necdsp_prg_r(offs_t offset)
 {
 	return get_prg(&m_bios[0], offset);
@@ -262,20 +267,12 @@ ioport_constructor sns_pfest94_device::device_input_ports() const
 	return INPUT_PORTS_NAME( pfest94_dsw );
 }
 
-
-//-------------------------------------------------
-//  device_timer - handler timer events
-//-------------------------------------------------
-
-void sns_pfest94_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+TIMER_CALLBACK_MEMBER(sns_pfest94_device::event_tick)
 {
-	if (id == TIMER_EVENT)
+	if (!m_count)
 	{
-		if (!m_count)
-		{
-			m_status |= 2;
-			pfest94_timer->reset();
-		}
-		m_count--;
+		m_status |= 2;
+		pfest94_timer->reset();
 	}
+	m_count--;
 }

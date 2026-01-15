@@ -1,25 +1,7 @@
-// AsmJit - Machine code generation for C++
+// This file is part of AsmJit project <https://asmjit.com>
 //
-//  * Official AsmJit Home Page: https://asmjit.com
-//  * Official Github Repository: https://github.com/asmjit/asmjit
-//
-// Copyright (c) 2008-2020 The AsmJit Authors
-//
-// This software is provided 'as-is', without any express or implied
-// warranty. In no event will the authors be held liable for any damages
-// arising from the use of this software.
-//
-// Permission is granted to anyone to use this software for any purpose,
-// including commercial applications, and to alter it and redistribute it
-// freely, subject to the following restrictions:
-//
-// 1. The origin of this software must not be misrepresented; you must not
-//    claim that you wrote the original software. If you use this software
-//    in a product, an acknowledgment in the product documentation would be
-//    appreciated but is not required.
-// 2. Altered source versions must be plainly marked as such, and must not be
-//    misrepresented as being the original software.
-// 3. This notice may not be removed or altered from any source distribution.
+// See <asmjit/core.h> or LICENSE.md for license and copyright information
+// SPDX-License-Identifier: Zlib
 
 #ifndef ASMJIT_X86_X86RAPASS_P_H_INCLUDED
 #define ASMJIT_X86_X86RAPASS_P_H_INCLUDED
@@ -28,82 +10,81 @@
 #ifndef ASMJIT_NO_COMPILER
 
 #include "../core/compiler.h"
-#include "../core/rabuilders_p.h"
+#include "../core/racfgblock_p.h"
+#include "../core/racfgbuilder_p.h"
 #include "../core/rapass_p.h"
 #include "../x86/x86assembler.h"
 #include "../x86/x86compiler.h"
+#include "../x86/x86emithelper_p.h"
 
 ASMJIT_BEGIN_SUB_NAMESPACE(x86)
 
 //! \cond INTERNAL
-
-//! \brief X86/X64 register allocation.
-
-//! \addtogroup asmjit_ra
+//! \addtogroup asmjit_x86
 //! \{
-
-// ============================================================================
-// [asmjit::X86RAPass]
-// ============================================================================
 
 //! X86 register allocation pass.
 //!
-//! Takes care of generating function prologs and epilogs, and also performs
-//! register allocation.
-class X86RAPass : public RAPass {
+//! Takes care of generating function prologs and epilogs, and also performs register allocation.
+class X86RAPass : public BaseRAPass {
 public:
   ASMJIT_NONCOPYABLE(X86RAPass)
-  typedef RAPass Base;
+  using Base = BaseRAPass;
 
-  bool _avxEnabled;
+  //! \name Members
+  //! \{
 
-  // --------------------------------------------------------------------------
-  // [Construction / Destruction]
-  // --------------------------------------------------------------------------
+  EmitHelper _emit_helper;
 
-  X86RAPass() noexcept;
-  virtual ~X86RAPass() noexcept;
+  //! \}
 
-  // --------------------------------------------------------------------------
-  // [Accessors]
-  // --------------------------------------------------------------------------
+  //! \name Construction & Destruction
+  //! \{
+
+  X86RAPass(BaseCompiler& cc) noexcept;
+  ~X86RAPass() noexcept override;
+
+  //! \}
+
+  //! \name Accessors
+  //! \{
 
   //! Returns the compiler casted to `x86::Compiler`.
-  inline Compiler* cc() const noexcept { return static_cast<Compiler*>(_cb); }
+  [[nodiscard]]
+  ASMJIT_INLINE_NODEBUG Compiler& cc() const noexcept { return static_cast<Compiler&>(_cb); }
 
-  // --------------------------------------------------------------------------
-  // [Utilities]
-  // --------------------------------------------------------------------------
+  //! Returns emit helper.
+  [[nodiscard]]
+  ASMJIT_INLINE_NODEBUG EmitHelper* emit_helper() noexcept { return &_emit_helper; }
 
-  inline uint32_t choose(uint32_t sseInstId, uint32_t avxInstId) noexcept {
-    return _avxEnabled ? avxInstId : sseInstId;
-  }
+  [[nodiscard]]
+  ASMJIT_INLINE_NODEBUG bool is_avx_enabled() const noexcept { return _emit_helper.is_avx_enabled(); }
 
-  // --------------------------------------------------------------------------
-  // [OnInit / OnDone]
-  // --------------------------------------------------------------------------
+  [[nodiscard]]
+  ASMJIT_INLINE_NODEBUG bool is_avx512_enabled() const noexcept { return _emit_helper.is_avx512_enabled(); }
 
-  void onInit() noexcept override;
-  void onDone() noexcept override;
+  //! \}
 
-  // --------------------------------------------------------------------------
-  // [CFG]
-  // --------------------------------------------------------------------------
+  //! \name Interface
+  //! \{
 
-  Error buildCFG() noexcept override;
+  void on_init() noexcept override;
+  void on_done() noexcept override;
 
-  // --------------------------------------------------------------------------
-  // [Emit]
-  // --------------------------------------------------------------------------
+  Error build_cfg_nodes() noexcept override;
 
-  Error onEmitMove(uint32_t workId, uint32_t dstPhysId, uint32_t srcPhysId) noexcept override;
-  Error onEmitSwap(uint32_t aWorkId, uint32_t aPhysId, uint32_t bWorkId, uint32_t bPhysId) noexcept override;
+  Error rewrite() noexcept override;
 
-  Error onEmitLoad(uint32_t workId, uint32_t dstPhysId) noexcept override;
-  Error onEmitSave(uint32_t workId, uint32_t srcPhysId) noexcept override;
+  Error emit_move(RAWorkReg* work_reg, uint32_t dst_phys_id, uint32_t src_phys_id) noexcept override;
+  Error emit_swap(RAWorkReg* a_reg, uint32_t a_phys_id, RAWorkReg* b_reg, uint32_t b_phys_id) noexcept override;
 
-  Error onEmitJump(const Label& label) noexcept override;
-  Error onEmitPreCall(InvokeNode* invokeNode) noexcept override;
+  Error emit_load(RAWorkReg* work_reg, uint32_t dst_phys_id) noexcept override;
+  Error emit_save(RAWorkReg* work_reg, uint32_t src_phys_id) noexcept override;
+
+  Error emit_jump(const Label& label) noexcept override;
+  Error emit_pre_call(InvokeNode* invoke_node) noexcept override;
+
+  //! \}
 };
 
 //! \}

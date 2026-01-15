@@ -102,29 +102,29 @@ const tms7000_disassembler::tms7000_opcodeinfo tms7000_disassembler::opcs[] = {
 	{0x9C, "BR", 45, 0 },
 	{0xAC, "BR", 12, 0 },
 
-	{0x66, "BTJO", 13, 0 },
-	{0x16, "BTJO", 14, 0 },
-	{0x36, "BTJO", 15, 0 },
-	{0x46, "BTJO", 16, 0 },
-	{0x26, "BTJO", 17, 0 },
-	{0x56, "BTJO", 18, 0 },
-	{0x76, "BTJO", 19, 0 },
+	{0x66, "BTJO", 13, STEP_COND },
+	{0x16, "BTJO", 14, STEP_COND },
+	{0x36, "BTJO", 15, STEP_COND },
+	{0x46, "BTJO", 16, STEP_COND },
+	{0x26, "BTJO", 17, STEP_COND },
+	{0x56, "BTJO", 18, STEP_COND },
+	{0x76, "BTJO", 19, STEP_COND },
 
-	{0x86, "BTJOP", 20, 0 },
-	{0x96, "BTJOP", 21, 0 },
-	{0xA6, "BTJOP", 22, 0 },
+	{0x86, "BTJOP", 20, STEP_COND },
+	{0x96, "BTJOP", 21, STEP_COND },
+	{0xA6, "BTJOP", 22, STEP_COND },
 
-	{0x67, "BTJZ", 13, 0 },
-	{0x17, "BTJZ", 14, 0 },
-	{0x37, "BTJZ", 15, 0 },
-	{0x47, "BTJZ", 16, 0 },
-	{0x27, "BTJZ", 17, 0 },
-	{0x57, "BTJZ", 18, 0 },
-	{0x77, "BTJZ", 19, 0 },
+	{0x67, "BTJZ", 13, STEP_COND },
+	{0x17, "BTJZ", 14, STEP_COND },
+	{0x37, "BTJZ", 15, STEP_COND },
+	{0x47, "BTJZ", 16, STEP_COND },
+	{0x27, "BTJZ", 17, STEP_COND },
+	{0x57, "BTJZ", 18, STEP_COND },
+	{0x77, "BTJZ", 19, STEP_COND },
 
-	{0x87, "BTJZP", 20, 0 },
-	{0x97, "BTJZP", 21, 0 },
-	{0xA7, "BTJZP", 22, 0 },
+	{0x87, "BTJZP", 20, STEP_COND },
+	{0x97, "BTJZP", 21, STEP_COND },
+	{0xA7, "BTJZP", 22, STEP_COND },
 
 	{0x8E, "CALL", 43, STEP_OVER },
 	{0x9E, "CALL", 45, STEP_OVER },
@@ -166,9 +166,9 @@ const tms7000_disassembler::tms7000_opcodeinfo tms7000_disassembler::opcs[] = {
 
 	{0x06, "DINT", 23, 0 },
 
-	{0xBA, "DJNZ", 25, 0 },
-	{0xCA, "DJNZ", 26, 0 },
-	{0xDA, "DJNZ", 27, 0 },
+	{0xBA, "DJNZ", 25, STEP_COND },
+	{0xCA, "DJNZ", 26, STEP_COND },
+	{0xDA, "DJNZ", 27, STEP_COND },
 
 	{0x6F, "DSB", 0, 0 },
 	{0x1F, "DSB", 1, 0 },
@@ -190,14 +190,14 @@ const tms7000_disassembler::tms7000_opcodeinfo tms7000_disassembler::opcs[] = {
 	{0xC4, "INV B", 23, 0 },
 	{0xD4, "INV", 24, 0 },
 
-	{0xE2, "JEQ", 28, 0 },
-	{0xE3, "JHS", 28, 0 },
-	{0xE7, "JL", 28, 0 },
+	{0xE2, "JEQ", 28, STEP_COND },
+	{0xE3, "JHS", 28, STEP_COND },
+	{0xE7, "JL", 28, STEP_COND },
 	{0xE0, "JMP", 28, 0 },
-	{0xE1, "JN", 28, 0 },
-	{0xE6, "JNZ", 28, 0 },
-	{0xE4, "JP", 28, 0 },
-	{0xE5, "JPZ", 28, 0 },
+	{0xE1, "JN", 28, STEP_COND },
+	{0xE6, "JNZ", 28, STEP_COND },
+	{0xE4, "JP", 28, STEP_COND },
+	{0xE5, "JPZ", 28, STEP_COND },
 
 	{0x8A, "LDA", 10, 0 },
 	{0x9A, "LDA", 45, 0 },
@@ -361,7 +361,6 @@ offs_t tms7000_disassembler::disassemble(std::ostream &stream, offs_t pc, const 
 {
 	int opcode, i/*, size = 1*/;
 	offs_t pos = pc;
-	char tmpbuf[32];
 
 	opcode = opcodes.r8(pos++);
 
@@ -399,28 +398,23 @@ offs_t tms7000_disassembler::disassemble(std::ostream &stream, offs_t pc, const 
 						util::stream_format(stream, of[j].opstr[k], (int8_t)b);
 						break;
 					case UI16:
-						c = (uint16_t)params.r8(pos++);
-						c <<= 8;
-						c += params.r8(pos++);
+						c = (uint16_t)params.r16(pos);
+						pos += 2;
 						util::stream_format(stream, of[j].opstr[k], (unsigned int)c);
 						break;
 					case I16:
-						d = (int16_t)params.r8(pos++);
-						d <<= 8;
-						d += params.r8(pos++);
+						d = (int16_t)params.r16(pos);
+						pos += 2;
 						util::stream_format(stream, of[j].opstr[k], (signed int)d);
 						break;
 					case PCREL:
 						b = (int8_t)params.r8(pos++);
-						sprintf(tmpbuf, "$%04X", pc+2+k+b);
-						util::stream_format(stream, of[j].opstr[k], tmpbuf);
+						util::stream_format(stream, of[j].opstr[k], util::string_format(">%04X", pc+2+k+b));
 						break;
 					case PCABS:
-						c = (uint16_t)params.r8(pos++);
-						c <<= 8;
-						c += params.r8(pos++);
-						sprintf(tmpbuf, "$%04X", c);
-						util::stream_format(stream, of[j].opstr[k], tmpbuf);
+						c = (uint16_t)params.r16(pos);
+						pos += 2;
+						util::stream_format(stream, of[j].opstr[k], util::string_format(">%04X", c));
 						break;
 					case TRAP:
 						vector = 0xffff - ((0xff - opcode) * 2);

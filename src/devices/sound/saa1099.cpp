@@ -203,17 +203,12 @@ void saa1099_device::device_clock_changed()
 //  sound_stream_update - handle a stream update
 //-------------------------------------------------
 
-void saa1099_device::sound_stream_update(sound_stream &stream, std::vector<read_stream_view> const &inputs, std::vector<write_stream_view> &outputs)
+void saa1099_device::sound_stream_update(sound_stream &stream)
 {
 	int j, ch;
 	/* if the channels are disabled we're done */
 	if (!m_all_ch_enable)
-	{
-		/* init output data */
-		outputs[LEFT].fill(0);
-		outputs[RIGHT].fill(0);
 		return;
-	}
 
 	for (ch = 0; ch < 2; ch++)
 	{
@@ -227,7 +222,7 @@ void saa1099_device::sound_stream_update(sound_stream &stream, std::vector<read_
 	}
 
 	/* fill all data needed */
-	for( j = 0; j < outputs[0].samples(); j++ )
+	for( j = 0; j < stream.samples(); j++ )
 	{
 		int output_l = 0, output_r = 0;
 
@@ -249,23 +244,38 @@ void saa1099_device::sound_stream_update(sound_stream &stream, std::vector<read_
 			}
 			m_channels[ch].counter -= clock_divider;
 
+			u8 level = 0; // output level (0...2, 0 = off, 1 = 100%, 2 = 50%)
 			// if the noise is enabled
-			u8 level = 0;
+			u8 noise_out = m_noise[ch/3].level & 1; // noise output (noise 0: chan 0-2, noise 1: chan 3-5)
+			u8 tone_out = m_channels[ch].level & 1; // tone output
 			if (m_channels[ch].noise_enable)
 			{
-				// if the noise level is high (noise 0: chan 0-2, noise 1: chan 3-5)
-				level ^= m_noise[ch/3].level & 1;
+				// if both noise and square wave are enabled, output is tone output
+				if (m_channels[ch].freq_enable)
+				{
+					// half amplitude if the noise level is high
+					if (noise_out)
+						level = tone_out << 1;
+					else
+						level = tone_out;
+				}
+				else
+				{
+					// output is noise output
+					level = noise_out;
+				}
 			}
 			// if the square wave is enabled
-			if (m_channels[ch].freq_enable)
+			else if (m_channels[ch].freq_enable)
 			{
-				// if the channel level is high
-				level ^= m_channels[ch].level & 1;
+				// output is tone output
+				level = tone_out;
 			}
-			if (level)
+			// if the output level is high
+			if (level > 0)
 			{
-				output_l += m_channels[ch].amplitude[ LEFT] * m_channels[ch].envelope[ LEFT] / 16;
-				output_r += m_channels[ch].amplitude[RIGHT] * m_channels[ch].envelope[RIGHT] / 16;
+				output_l += m_channels[ch].amplitude[ LEFT] * m_channels[ch].envelope[ LEFT] / 16 / level;
+				output_r += m_channels[ch].amplitude[RIGHT] * m_channels[ch].envelope[RIGHT] / 16 / level;
 			}
 		}
 
@@ -285,8 +295,8 @@ void saa1099_device::sound_stream_update(sound_stream &stream, std::vector<read_
 			m_noise[ch].counter -= clock_divider;
 		}
 		/* write sound data to the buffer */
-		outputs[LEFT].put_int(j, output_l, 32768 * 6);
-		outputs[RIGHT].put_int(j, output_r, 32768 * 6);
+		stream.put_int(LEFT, j, output_l, 32768 * 6);
+		stream.put_int(RIGHT, j, output_r, 32768 * 6);
 	}
 }
 

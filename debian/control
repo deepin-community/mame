@@ -1,38 +1,39 @@
 Source: mame
 Section: games
-Priority: optional
 Maintainer: Debian Games Team <pkg-games-devel@lists.alioth.debian.org>
 Uploaders: Cesare Falco <c.falco@ubuntu.com>,
  Emmanuel Kasper <emmanuel@libera.cc>,
  Jordi Mallach <jordi@debian.org>
 Build-Depends: debhelper-compat (= 13),
+ binutils-gold [arm64],
  dpkg-dev (>= 1.17),
+ libasio-dev (>= 1.20),
  libexpat1-dev,
  libflac-dev,
- libfontconfig1-dev,
+ libfontconfig-dev,
  libglm-dev,
  libjpeg-dev,
- liblua5.3-dev,
+# liblua5.3-dev,
  libportmidi-dev [linux-any],
  libpugixml-dev,
  libsdl2-dev,
  libsdl2-ttf-dev,
  libsqlite3-dev,
  libutf8proc-dev,
- libutil-freebsd-dev [kfreebsd-any],
  libxinerama-dev,
  portaudio19-dev,
  python3-dev,
  qtbase5-dev,
  rapidjson-dev (>= 1.0),
+ sphinx-common,
  zlib1g-dev
-Build-Depends-Indep: python3-sphinx
-Standards-Version: 4.6.0
+Build-Depends-Indep: python3-sphinx,
+ python3-sphinxcontrib.svg2pdfconverter,
+ sphinx-rtd-theme-common
+Standards-Version: 4.7.2
 Vcs-Git: https://salsa.debian.org/games-team/mame.git
 Vcs-Browser: https://salsa.debian.org/games-team/mame
 Homepage: https://mamedev.org/
-XS-Autobuild: yes
-Rules-Requires-Root: no
 
 Package: mame
 Architecture: any
@@ -94,7 +95,7 @@ Package: mame-doc
 Section: doc
 Architecture: all
 Depends: ${misc:Depends}
-Suggests: libjs-sphinxdoc, libjs-mathjax
+Recommends: ${sphinxdoc:Depends}, libjs-mathjax
 Enhances: mame
 Multi-Arch: foreign
 Description: Documentation for MAME

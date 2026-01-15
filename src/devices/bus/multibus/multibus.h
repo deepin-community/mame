@@ -76,66 +76,100 @@
 
 #pragma once
 
-class device_multibus_interface;
-
-class multibus_slot_device : public device_t,
-							 public device_single_card_slot_interface<device_multibus_interface>
+class multibus_device
+	: public device_t
+	, public device_memory_interface
 {
 public:
-	multibus_slot_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
-	virtual ~multibus_slot_device();
+	multibus_device(machine_config const &mconfig, char const *tag, device_t *owner, u32 clock);
 
-	static constexpr unsigned BUS_CLOCK = 9830400;
+	enum flags : u16
+	{
+		FLAG_UNMAPPED = 0x0001,
+	};
 
-	// Install r/w functions in I/O space
-	void install_io_rw(address_space& space);
+	// interrupt interface
+	template <unsigned I> auto int_callback() { return m_int_cb[I].bind(); }
+	template <unsigned I> void int_w(int state) { m_int_cb[I](state); }
 
-	// Set memory space
-	void install_mem_rw(address_space& space);
+	// XACK/
+	auto xack_cb() { return m_xack_cb.bind(); }
 
-	auto irq0_callback() { return m_irq_cb[0].bind(); }
-	auto irq1_callback() { return m_irq_cb[1].bind(); }
-	auto irq2_callback() { return m_irq_cb[2].bind(); }
-	auto irq3_callback() { return m_irq_cb[3].bind(); }
-	auto irq4_callback() { return m_irq_cb[4].bind(); }
-	auto irq5_callback() { return m_irq_cb[5].bind(); }
-	auto irq6_callback() { return m_irq_cb[6].bind(); }
-	auto irq7_callback() { return m_irq_cb[7].bind(); }
-	auto irqa_callback() { return m_irqa_cb.bind(); }
-
-	DECLARE_WRITE_LINE_MEMBER( irq0_w );
-	DECLARE_WRITE_LINE_MEMBER( irq1_w );
-	DECLARE_WRITE_LINE_MEMBER( irq2_w );
-	DECLARE_WRITE_LINE_MEMBER( irq3_w );
-	DECLARE_WRITE_LINE_MEMBER( irq4_w );
-	DECLARE_WRITE_LINE_MEMBER( irq5_w );
-	DECLARE_WRITE_LINE_MEMBER( irq6_w );
-	DECLARE_WRITE_LINE_MEMBER( irq7_w );
-	DECLARE_WRITE_LINE_MEMBER( irqa_w );
+	// Set XACK/ signal (this is meant for "device_multibus_interface" devices)
+	void xack_w(int state) { m_xack_cb(state); }
 
 protected:
-	virtual void device_start() override;
+	// device_t overrides
+	virtual void device_start() override ATTR_COLD;
 
-	devcb_write_line::array<8> m_irq_cb;
-	devcb_write_line           m_irqa_cb;
+	// device_memory_interface overrides
+	virtual space_config_vector memory_space_config() const override;
 
+	void mem_map(address_map &map);
+	void pio_map(address_map &map);
+
+private:
+	address_space_config const m_mem_config;
+	address_space_config const m_pio_config;
+
+	devcb_write_line::array<8> m_int_cb;
+	devcb_write_line m_xack_cb;
+};
+
+class multibus_slot_device
+	: public device_t
+	, public device_slot_interface
+{
+public:
+	multibus_slot_device(machine_config const &mconfig, char const *tag, device_t *owner, u32 clock = DERIVED_CLOCK(1, 1));
+
+	template <typename T, typename U>
+	multibus_slot_device(machine_config const &mconfig, char const *tag, device_t *owner, T &&bus_tag, U &&slot_options, char const *default_option, bool const fixed, u32 clock = DERIVED_CLOCK(1, 1))
+		: multibus_slot_device(mconfig, tag, owner, clock)
+	{
+		m_bus.set_tag(std::forward<T>(bus_tag));
+
+		option_reset();
+		slot_options(*this);
+		set_default_option(default_option);
+		set_fixed(fixed);
+	}
+
+	auto bus() const { return m_bus; }
+
+protected:
+	virtual void device_start() override ATTR_COLD;
+
+private:
+	required_device<multibus_device> m_bus;
 };
 
 class device_multibus_interface : public device_interface
 {
-public:
-	// Install r/w functions in I/O space
-	virtual void install_io_rw(address_space& space) = 0;
-
-	// Set CPU memory space
-	virtual void install_mem_rw(address_space& space) = 0;
-
 protected:
-	device_multibus_interface(const machine_config &mconfig , device_t &device);
-	virtual ~device_multibus_interface();
+	device_multibus_interface(machine_config const &mconfig, device_t &device);
+
+	// configuration
+	template <unsigned I> auto int_callback() { return m_int[I].bind(); }
+
+	// device_interface implementation
+	virtual void interface_config_complete() override ATTR_COLD;
+
+	// runtime
+	template <unsigned I> void int_w(int state) { m_bus->int_w<I>(state); }
+	void int_w(unsigned number, int state);
+
+	void xack_w(int state) { m_bus->xack_w(state); }
+	void unmap(int spacenum, offs_t addrstart, offs_t addrend, offs_t addrmirror = 0U);
+
+	required_device<multibus_device> m_bus;
+
+private:
+	devcb_write_line::array<8> m_int;
 };
 
 // device type declaration
+DECLARE_DEVICE_TYPE(MULTIBUS, multibus_device)
 DECLARE_DEVICE_TYPE(MULTIBUS_SLOT, multibus_slot_device)
 
-#endif /* MAME_BUS_MULTIBUS_MULTIBUS_H */
+#endif // MAME_BUS_MULTIBUS_MULTIBUS_H

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <algorithm>
 
 
 // IRQ Lines
@@ -23,8 +24,9 @@
 #define DSP56156_IRQ_MODC  2
 #define DSP56156_IRQ_RESET 3  /* Is this needed? */
 
-
 namespace DSP_56156 {
+
+class dsp56156_device;
 
 /***************************************************************************
     STRUCTURES & TYPEDEFS
@@ -32,15 +34,22 @@ namespace DSP_56156 {
 // 5-4 Host Interface
 struct dsp56156_host_interface
 {
+	dsp56156_host_interface()
+		: hcr(nullptr), hsr(nullptr), htrx(nullptr)
+		, icr(0), cvr(0), isr(0), ivr(0), trxh(0), trxl(0)
+		, bootstrap_offset(0)
+	{
+	}
+
 	// **** DSP56156 side **** //
 	// Host Control Register
-	uint16_t* hcr;
+	uint16_t *hcr;
 
 	// Host Status Register
-	uint16_t* hsr;
+	uint16_t *hsr;
 
 	// Host Transmit/Receive Data
-	uint16_t* htrx;
+	uint16_t *htrx;
 
 	// **** Host CPU side **** //
 	// Interrupt Control Register
@@ -61,12 +70,19 @@ struct dsp56156_host_interface
 
 	// HACK - Host interface bootstrap write offset
 	uint16_t bootstrap_offset;
-
 };
 
 // 1-9 ALU
 struct dsp56156_data_alu
 {
+	dsp56156_data_alu()
+	{
+		x.d = 0;
+		y.d = 0;
+		a.q = 0;
+		b.q = 0;
+	}
+
 	// Four 16-bit input registers (can be accessed as 2 32-bit registers)
 	PAIR x;
 	PAIR y;
@@ -84,6 +100,14 @@ struct dsp56156_data_alu
 // 1-10 Address Generation Unit (AGU)
 struct dsp56156_agu
 {
+	dsp56156_agu()
+		: r0(0), r1(0), r2(0), r3(0)
+		, n0(0), n1(0), n2(0), n3(0)
+		, m0(0), m1(0), m2(0), m3(0)
+		, temp(0)
+	{
+	}
+
 	// Four address registers
 	uint16_t r0;
 	uint16_t r1;
@@ -114,26 +138,24 @@ struct dsp56156_agu
 // 1-11 Program Control Unit (PCU)
 struct dsp56156_pcu
 {
-	// Program Counter
-	uint16_t pc;
+	dsp56156_pcu()
+		: pc(0), la(0), lc(0), sr(0), omr(0), sp(0)
+		, service_interrupts(nullptr)
+		, reset_vector(0)
+		, ipc(0)
+	{
+		for (auto &s : ss)
+			s.d = 0;
+		std::fill(std::begin(pending_interrupts), std::end(pending_interrupts), 0);
+	}
 
-	// Loop Address
-	uint16_t la;
-
-	// Loop Counter
-	uint16_t lc;
-
-	// Status Register
-	uint16_t sr;
-
-	// Operating Mode Register
-	uint16_t omr;
-
-	// Stack Pointer
-	uint16_t sp;
-
-	// Stack (TODO: 15-level?)
-	PAIR ss[16];
+	uint16_t pc;     // Program Counter
+	uint16_t la;     // Loop Address
+	uint16_t lc;     // Loop Counter
+	uint16_t sr;     // Status Register
+	uint16_t omr;    // Operating Mode Register
+	uint16_t sp;     // Stack Pointer
+	PAIR     ss[16]; // Stack (TODO: 15-level?)
 
 	// Controls IRQ processing
 	void (*service_interrupts)(void);
@@ -145,12 +167,27 @@ struct dsp56156_pcu
 
 	// Other PCU internals
 	uint16_t reset_vector;
-
+	uint16_t ipc;
 };
 
 // 1-8 The dsp56156 CORE
 struct dsp56156_core
 {
+	dsp56156_core()
+		: modA_state(false), modB_state(false), modC_state(false), reset_state(false)
+		, bootstrap_mode(0)
+		, repFlag(0), repAddr(0)
+		, icount(0)
+		, ppc(0)
+		, op(0)
+		, interrupt_cycles(0)
+		, output_pins_changed(nullptr)
+		, device(nullptr)
+		, program_ram(nullptr)
+	{
+		std::fill(std::begin(peripheral_ram), std::end(peripheral_ram), 0);
+	}
+
 	// PROGRAM CONTROLLER
 	dsp56156_pcu PCU;
 
@@ -182,15 +219,14 @@ struct dsp56156_core
 	uint8_t   repFlag;    // Knowing if we're in a 'repeat' state (dunno how the processor does this)
 	uint32_t  repAddr;    // The address of the instruction to repeat...
 
-
-	/* MAME internal stuff */
+	// MAME internal stuff
 	int icount;
 
 	uint32_t          ppc;
 	uint32_t          op;
-	int             interrupt_cycles;
-	void            (*output_pins_changed)(uint32_t pins);
-	cpu_device *device;
+	int               interrupt_cycles;
+	void              (*output_pins_changed)(uint32_t pins);
+	dsp56156_device   *device;
 	memory_access<16, 1, -1, ENDIANNESS_LITTLE>::cache cache;
 	memory_access<16, 1, -1, ENDIANNESS_LITTLE>::specific program;
 	memory_access<16, 1, -1, ENDIANNESS_LITTLE>::specific data;
@@ -211,21 +247,23 @@ public:
 	void host_interface_write(uint8_t offset, uint8_t data);
 	uint8_t host_interface_read(uint8_t offset);
 
-	uint16_t get_peripheral_memory(uint16_t addr);
+	void dsp56156_program_map(address_map &map) ATTR_COLD;
+	void dsp56156_x_data_map(address_map &map) ATTR_COLD;
 
-	void dsp56156_program_map(address_map &map);
-	void dsp56156_x_data_map(address_map &map);
+	auto portc_cb() { return portC_cb.bind(); }
+
+	void output_portc(uint16_t value) { portC_cb(value); }
+
 protected:
 	// device-level overrides
-	virtual void device_start() override;
-	virtual void device_reset() override;
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
 
 	// device_execute_interface overrides
-	virtual uint64_t execute_clocks_to_cycles(uint64_t clocks) const noexcept override { return (clocks + 2 - 1) / 2; }
-	virtual uint64_t execute_cycles_to_clocks(uint64_t cycles) const noexcept override { return (cycles * 2); }
+	virtual uint64_t execute_clocks_to_cycles(uint64_t clocks) const noexcept override { return clocks; }
+	virtual uint64_t execute_cycles_to_clocks(uint64_t cycles) const noexcept override { return cycles; }
 	virtual uint32_t execute_min_cycles() const noexcept override { return 1; }
 	virtual uint32_t execute_max_cycles() const noexcept override { return 8; }
-	virtual uint32_t execute_input_lines() const noexcept override { return 4; }
 	virtual bool execute_input_edge_triggered(int inputnum) const noexcept override { return inputnum == DSP56156_IRQ_RESET; }
 	virtual void execute_run() override;
 	virtual void execute_set_input(int inputnum, int state) override;
@@ -245,6 +283,8 @@ private:
 	required_shared_ptr<uint16_t> m_program_ram;
 
 	dsp56156_core m_core;
+
+	devcb_write16 portC_cb;
 
 	void agu_init();
 	void alu_init();

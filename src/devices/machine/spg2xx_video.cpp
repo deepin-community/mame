@@ -11,12 +11,12 @@
 
 DEFINE_DEVICE_TYPE(SPG24X_VIDEO, spg24x_video_device, "spg24x_video", "SPG240-series System-on-a-Chip (Video)")
 
-#define LOG_IRQS            (1U << 4)
-#define LOG_VLINES          (1U << 5)
-#define LOG_DMA             (1U << 9)
-#define LOG_PPU_READS       (1U << 22)
-#define LOG_PPU_WRITES      (1U << 23)
-#define LOG_UNKNOWN_PPU     (1U << 24)
+#define LOG_IRQS            (1U << 1)
+#define LOG_VLINES          (1U << 2)
+#define LOG_DMA             (1U << 3)
+#define LOG_PPU_READS       (1U << 4)
+#define LOG_PPU_WRITES      (1U << 5)
+#define LOG_UNKNOWN_PPU     (1U << 6)
 #define LOG_PPU             (LOG_PPU_READS | LOG_PPU_WRITES | LOG_UNKNOWN_PPU)
 #define LOG_ALL             (LOG_IRQS | LOG_PPU | LOG_VLINES | LOG_DMA )
 
@@ -28,16 +28,16 @@ DEFINE_DEVICE_TYPE(SPG24X_VIDEO, spg24x_video_device, "spg24x_video", "SPG240-se
 
 spg2xx_video_device::spg2xx_video_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock) :
 	device_t(mconfig, type, tag, owner, clock),
-	m_guny_in(*this),
-	m_gunx_in(*this),
-	m_sprlimit_read_cb(*this),
+	m_guny_in(*this, 0),
+	m_gunx_in(*this, 0),
+	m_sprlimit_read_cb(*this, 0),
+	m_video_irq_cb(*this),
 	m_cpu(*this, finder_base::DUMMY_TAG),
 	m_screen(*this, finder_base::DUMMY_TAG),
 	m_scrollram(*this, "scrollram"),
 	m_hcompram(*this, "hcompram"),
 	m_paletteram(*this, "paletteram"),
 	m_spriteram(*this, "spriteram"),
-	m_video_irq_cb(*this),
 	m_renderer(*this, "renderer")
 {
 }
@@ -49,16 +49,10 @@ spg24x_video_device::spg24x_video_device(const machine_config &mconfig, const ch
 
 void spg2xx_video_device::device_start()
 {
-	m_guny_in.resolve_safe(0);
-	m_gunx_in.resolve_safe(0);
-
-	m_screenpos_timer = timer_alloc(TIMER_SCREENPOS);
+	m_screenpos_timer = timer_alloc(FUNC(spg2xx_video_device::screenpos_hit), this);
 	m_screenpos_timer->adjust(attotime::never);
 
 	save_item(NAME(m_video_regs));
-
-	m_sprlimit_read_cb.resolve_safe(0);
-	m_video_irq_cb.resolve();
 }
 
 void spg2xx_video_device::device_reset()
@@ -101,8 +95,8 @@ uint32_t spg2xx_video_device::screen_update(screen_device &screen, bitmap_rgb32 
 	}
 
 
-	const uint32_t page1_addr = 0x40 * m_video_regs[0x20];
-	const uint32_t page2_addr = 0x40 * m_video_regs[0x21];
+	const uint32_t page1_addr = m_video_regs[0x20];
+	const uint32_t page2_addr = m_video_regs[0x21];
 	const uint32_t sprite_addr = 0x40 * m_video_regs[0x22];
 
 	uint16_t *page1_scroll = m_video_regs + 0x10;
@@ -116,9 +110,9 @@ uint32_t spg2xx_video_device::screen_update(screen_device &screen, bitmap_rgb32 
 
 		for (int i = 0; i < 4; i++)
 		{
-			m_renderer->draw_page(false, false, false, 0, cliprect, scanline, i, page1_addr, page1_scroll, page1_regs, mem, m_paletteram, m_scrollram, 0);
-			m_renderer->draw_page(false, false, false, 0, cliprect, scanline, i, page2_addr, page2_scroll, page2_regs, mem, m_paletteram, m_scrollram, 1);
-			m_renderer->draw_sprites(false, 0, false, 0, false, cliprect, scanline, i, sprite_addr, mem, m_paletteram, m_spriteram, m_sprlimit_read_cb());
+			m_renderer->draw_page(cliprect, scanline, i, page1_addr, page1_scroll, page1_regs, mem, m_paletteram, m_scrollram, 0);
+			m_renderer->draw_page(cliprect, scanline, i, page2_addr, page2_scroll, page2_regs, mem, m_paletteram, m_scrollram, 1);
+			m_renderer->draw_sprites(cliprect, scanline, i, sprite_addr, mem, m_paletteram, m_spriteram, m_sprlimit_read_cb());
 		}
 
 		m_renderer->apply_saturation_and_fade(bitmap, cliprect, scanline);
@@ -137,7 +131,11 @@ void spg2xx_video_device::do_sprite_dma(uint32_t len)
 
 	for (uint32_t j = 0; j < len; j++)
 	{
-		m_spriteram[(dst + j) & 0x3ff] = mem.read_word(src + j);
+		int dest = dst + j;
+		// jak_dpma does a full length transfer offset from the start, which causes corruption
+		// on the options screen if we wrap, assume DMA just writes to nowhere if it goes out of bounds
+		if (dest < 0x400)
+			m_spriteram[dest] = mem.read_word(src + j);
 	}
 
 	m_video_regs[0x72] = 0;
@@ -439,7 +437,7 @@ void spg2xx_video_device::video_w(offs_t offset, uint16_t data)
 	}
 }
 
-WRITE_LINE_MEMBER(spg2xx_video_device::vblank)
+void spg2xx_video_device::vblank(int state)
 {
 	if (!state)
 	{
@@ -463,24 +461,17 @@ void spg2xx_video_device::check_video_irq()
 	m_video_irq_cb((VIDEO_IRQ_STATUS & VIDEO_IRQ_ENABLE) ? ASSERT_LINE : CLEAR_LINE);
 }
 
-void spg2xx_video_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+TIMER_CALLBACK_MEMBER(spg2xx_video_device::screenpos_hit)
 {
-	switch (id)
+	if (VIDEO_IRQ_ENABLE & 2)
 	{
-		case TIMER_SCREENPOS:
-		{
-			if (VIDEO_IRQ_ENABLE & 2)
-			{
-				VIDEO_IRQ_STATUS |= 2;
-				check_video_irq();
-			}
-			m_screen->update_partial(m_screen->vpos());
-
-			// fire again, jak_dbz pinball needs this
-			m_screenpos_timer->adjust(m_screen->time_until_pos(m_video_regs[0x36], m_video_regs[0x37] << 1));
-			break;
-		}
+		VIDEO_IRQ_STATUS |= 2;
+		check_video_irq();
 	}
+	m_screen->update_partial(m_screen->vpos());
+
+	// fire again, jak_dbz pinball needs this
+	m_screenpos_timer->adjust(m_screen->time_until_pos(m_video_regs[0x36], m_video_regs[0x37] << 1));
 }
 
 

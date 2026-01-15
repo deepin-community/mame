@@ -18,19 +18,99 @@
 
 **********************************************************************/
 
-
 #include "emu.h"
 #include "tube_32016.h"
+
+#include "cpu/ns32000/ns32000.h"
+#include "machine/ns32081.h"
+#include "machine/ram.h"
+#include "machine/tube.h"
+
 #include "softlist_dev.h"
 
 
-//**************************************************************************
-//  DEVICE DEFINITIONS
-//**************************************************************************
+namespace {
 
-DEFINE_DEVICE_TYPE(BBC_TUBE_32016, bbc_tube_32016_device, "bbc_tube_32016", "Acorn 32016 2nd processor")
-DEFINE_DEVICE_TYPE(BBC_TUBE_16032, bbc_tube_16032_device, "bbc_tube_16032", "Acorn 16032 2nd processor (prototype)")
-DEFINE_DEVICE_TYPE(BBC_TUBE_32016L, bbc_tube_32016l_device, "bbc_tube_32016l", "Acorn Large 32016 2nd processor")
+// ======================> bbc_tube_32016_device
+
+class bbc_tube_32016_device : public device_t, public device_bbc_tube_interface
+{
+public:
+	bbc_tube_32016_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
+		: bbc_tube_32016_device(mconfig, BBC_TUBE_32016, tag, owner, clock)
+	{
+	}
+
+protected:
+	bbc_tube_32016_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock)
+		: device_t(mconfig, type, tag, owner, clock)
+		, device_bbc_tube_interface(mconfig, *this)
+		, m_maincpu(*this, "maincpu")
+		, m_ns32081(*this, "ns32081")
+		, m_ula(*this, "ula")
+		, m_ram(*this, "ram")
+		, m_rom(*this, "rom")
+	{
+	}
+
+	// device_t overrides
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
+
+	// optional information overrides
+	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
+	virtual const tiny_rom_entry *device_rom_region() const override ATTR_COLD;
+	virtual ioport_constructor device_input_ports() const override ATTR_COLD;
+
+	virtual uint8_t host_r(offs_t offset) override;
+	virtual void host_w(offs_t offset, uint8_t data) override;
+
+	required_device<ns32016_device> m_maincpu;
+	required_device<ns32081_device> m_ns32081;
+	required_device<tube_device> m_ula;
+	required_device<ram_device> m_ram;
+	required_memory_region m_rom;
+
+	memory_passthrough_handler m_rom_shadow_tap;
+
+	void tube_32016_mem(address_map &map) ATTR_COLD;
+
+	void prst_w(int state);
+};
+
+
+// ======================> bbc_tube_16032_device
+
+class bbc_tube_16032_device : public bbc_tube_32016_device
+{
+public:
+	bbc_tube_16032_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
+		: bbc_tube_32016_device(mconfig, BBC_TUBE_16032, tag, owner, clock)
+	{
+	}
+
+protected:
+	// optional information overrides
+	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
+	virtual const tiny_rom_entry *device_rom_region() const override ATTR_COLD;
+};
+
+
+// ======================> bbc_tube_32016l_device
+
+class bbc_tube_32016l_device : public bbc_tube_32016_device
+{
+public:
+	bbc_tube_32016l_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
+		: bbc_tube_32016_device(mconfig, BBC_TUBE_32016L, tag, owner, clock)
+	{
+	}
+
+protected:
+	// optional information overrides
+	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
+	virtual const tiny_rom_entry *device_rom_region() const override ATTR_COLD;
+};
 
 
 //-------------------------------------------------
@@ -41,8 +121,9 @@ void bbc_tube_32016_device::tube_32016_mem(address_map &map)
 {
 }
 
+
 //-------------------------------------------------
-//  ROM( tube_32016 )
+//  rom_region - device-specific ROM region
 //-------------------------------------------------
 
 ROM_START(tube_32016)
@@ -81,8 +162,25 @@ ROM_START(tube_32016l)
 	ROMX_LOAD("pan200hi.rom", 0x0001, 0x4000, CRC(cab98d6b) SHA1(dfad1f4180c50757a74fcfe3a0ee7d7b48eb1bee), ROM_SKIP(1) | ROM_BIOS(0)) // 0201-763-02 Pandora Hi
 ROM_END
 
+
+const tiny_rom_entry *bbc_tube_32016_device::device_rom_region() const
+{
+	return ROM_NAME( tube_32016 );
+}
+
+const tiny_rom_entry *bbc_tube_16032_device::device_rom_region() const
+{
+	return ROM_NAME( tube_16032 );
+}
+
+const tiny_rom_entry *bbc_tube_32016l_device::device_rom_region() const
+{
+	return ROM_NAME( tube_32016l );
+}
+
+
 //-------------------------------------------------
-//  INPUT_PORTS( tube_32016 )
+//  input_ports - device-specific input ports
 //-------------------------------------------------
 
 static INPUT_PORTS_START(tube_32016)
@@ -120,6 +218,12 @@ static INPUT_PORTS_START(tube_32016)
 	PORT_DIPSETTING(0x00, "Reserved")
 INPUT_PORTS_END
 
+ioport_constructor bbc_tube_32016_device::device_input_ports() const
+{
+	return INPUT_PORTS_NAME( tube_32016 );
+}
+
+
 //-------------------------------------------------
 //  device_add_mconfig - add device configuration
 //-------------------------------------------------
@@ -135,6 +239,7 @@ void bbc_tube_32016_device::device_add_mconfig(machine_config &config)
 	TUBE(config, m_ula);
 	m_ula->pnmi_handler().set_inputline(m_maincpu, INPUT_LINE_NMI);
 	m_ula->pirq_handler().set_inputline(m_maincpu, INPUT_LINE_IRQ0);
+	m_ula->prst_handler().set(FUNC(bbc_tube_32016_device::prst_w));
 
 	RAM(config, m_ram).set_default_size("1M").set_extra_options("256K").set_default_value(0);
 
@@ -161,67 +266,6 @@ void bbc_tube_32016l_device::device_add_mconfig(machine_config &config)
 	m_ram->set_default_size("4M").set_extra_options("1M").set_default_value(0);
 }
 
-//-------------------------------------------------
-//  rom_region - device-specific ROM region
-//-------------------------------------------------
-
-const tiny_rom_entry *bbc_tube_32016_device::device_rom_region() const
-{
-	return ROM_NAME( tube_32016 );
-}
-
-const tiny_rom_entry *bbc_tube_16032_device::device_rom_region() const
-{
-	return ROM_NAME( tube_16032 );
-}
-
-const tiny_rom_entry *bbc_tube_32016l_device::device_rom_region() const
-{
-	return ROM_NAME( tube_32016l );
-}
-
-//-------------------------------------------------
-//  input_ports - device-specific input ports
-//-------------------------------------------------
-
-ioport_constructor bbc_tube_32016_device::device_input_ports() const
-{
-	return INPUT_PORTS_NAME( tube_32016 );
-}
-
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-//-------------------------------------------------
-//  bbc_tube_32016_device - constructor
-//-------------------------------------------------
-
-bbc_tube_32016_device::bbc_tube_32016_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock)
-	: device_t(mconfig, type, tag, owner, clock)
-	, device_bbc_tube_interface(mconfig, *this)
-	, m_maincpu(*this, "maincpu")
-	, m_ns32081(*this, "ns32081")
-	, m_ula(*this, "ula")
-	, m_ram(*this, "ram")
-	, m_rom(*this, "rom")
-{
-}
-
-bbc_tube_32016_device::bbc_tube_32016_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
-	: bbc_tube_32016_device(mconfig, BBC_TUBE_32016, tag, owner, clock)
-{
-}
-
-bbc_tube_16032_device::bbc_tube_16032_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
-	: bbc_tube_32016_device(mconfig, BBC_TUBE_16032, tag, owner, clock)
-{
-}
-
-bbc_tube_32016l_device::bbc_tube_32016l_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
-	: bbc_tube_32016_device(mconfig, BBC_TUBE_32016L, tag, owner, clock)
-{
-}
 
 //-------------------------------------------------
 //  device_start - device-specific startup
@@ -242,24 +286,36 @@ void bbc_tube_32016_device::device_reset()
 	// address map during booting
 	program.install_rom(0x000000, 0x007fff, 0xff8000, m_rom->base());
 
-	m_rom_shadow_tap = program.install_write_tap(0x000000, 0xffffff, "rom_shadow_w",[this](offs_t offset, u16 &data, u16 mem_mask)
-	{
-		// delete this tap
-		m_rom_shadow_tap->remove();
+	m_rom_shadow_tap.remove();
+	m_rom_shadow_tap = program.install_write_tap(
+			0x000000, 0xffffff,
+			"rom_shadow_w",
+			[this] (offs_t offset, u16 &data, u16 mem_mask)
+			{
+				// delete this tap
+				m_rom_shadow_tap.remove();
 
-		// address map after booting
-		m_maincpu->space(AS_PROGRAM).nop_readwrite(0x000000, 0xffffff);
-		m_maincpu->space(AS_PROGRAM).install_ram(0x000000, m_ram->mask(), 0x7fffff ^ m_ram->mask(), m_ram->pointer());
-		m_maincpu->space(AS_PROGRAM).install_rom(0xf00000, 0xf07fff, 0x038000, m_rom->base());
-		m_maincpu->space(AS_PROGRAM).install_read_port(0xf90000, 0xf90001, 0x00fffe, "CONFIG");
-		m_maincpu->space(AS_PROGRAM).install_readwrite_handler(0xfffff0, 0xffffff, read8sm_delegate(*m_ula, FUNC(tube_device::parasite_r)), write8sm_delegate(*m_ula, FUNC(tube_device::parasite_w)), 0xff);
-	});
+				// address map after booting
+				m_maincpu->space(AS_PROGRAM).nop_readwrite(0x000000, 0xffffff);
+				m_maincpu->space(AS_PROGRAM).install_ram(0x000000, m_ram->mask(), 0x7fffff ^ m_ram->mask(), m_ram->pointer());
+				m_maincpu->space(AS_PROGRAM).install_rom(0xf00000, 0xf07fff, 0x038000, m_rom->base());
+				m_maincpu->space(AS_PROGRAM).install_read_port(0xf90000, 0xf90001, 0x00fffe, "CONFIG");
+				m_maincpu->space(AS_PROGRAM).install_readwrite_handler(0xfffff0, 0xffffff, read8sm_delegate(*m_ula, FUNC(tube_device::parasite_r)), write8sm_delegate(*m_ula, FUNC(tube_device::parasite_w)), 0xff);
+			},
+			&m_rom_shadow_tap);
 }
 
 
 //**************************************************************************
 //  IMPLEMENTATION
 //**************************************************************************
+
+void bbc_tube_32016_device::prst_w(int state)
+{
+	device_reset();
+
+	m_maincpu->set_input_line(INPUT_LINE_RESET, state);
+}
 
 uint8_t bbc_tube_32016_device::host_r(offs_t offset)
 {
@@ -270,3 +326,10 @@ void bbc_tube_32016_device::host_w(offs_t offset, uint8_t data)
 {
 	m_ula->host_w(offset, data);
 }
+
+} // anonymous namespace
+
+
+DEFINE_DEVICE_TYPE_PRIVATE(BBC_TUBE_32016, device_bbc_tube_interface, bbc_tube_32016_device, "bbc_tube_32016", "Acorn 32016 2nd processor")
+DEFINE_DEVICE_TYPE_PRIVATE(BBC_TUBE_16032, device_bbc_tube_interface, bbc_tube_16032_device, "bbc_tube_16032", "Acorn 16032 2nd processor (prototype)")
+DEFINE_DEVICE_TYPE_PRIVATE(BBC_TUBE_32016L, device_bbc_tube_interface, bbc_tube_32016l_device, "bbc_tube_32016l", "Acorn Large 32016 2nd processor")

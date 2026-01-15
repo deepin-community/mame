@@ -30,27 +30,27 @@ and saving/loading save states.
 
 **Tab**
     Toggles the configuration menu.
-**~** (tilde key)
+**`**/**~** (backtick/tilde key)
     Toggles the On-Screen Display.
 
     If you are running with -debug, this key sends a ‘break’ in emulation.
 
-    When the on-screen display is visible, you can use the following
-    keys to control it:
+    When a slider control is visible, the keyboard controls are the same as
+    in the Slider Controls menu:
 
     * **Up** - select previous parameter to modify.
     * **Down** - select next parameter to modify.
     * **Left** - decrease the value of the selected parameter.
     * **Right** - increase the value of the selected parameter.
-    * **Enter** - reset parameter value to its default.
+    * **Delete** - reset parameter value to its default.
+    * **Alt+Left** - decrease the value by the largest amount.
     * **Control+Left** - decrease the value by 10x.
     * **Shift+Left** - decrease the value by 0.1x.
-    * **Alt+Left** - decrease the value by the smallest amount.
+    * **Shift+Alt+Left** - decrease the value by the smallest amount.
+    * **Alt+Right** - increase the value by the largest amount.
     * **Control+Right** - increase the value by 10x.
     * **Shift+Right** - increase the value by 0.1x.
-    * **Alt+Right** - increase the value by the smallest amount.
-    * **End** - temporarily hide the On Screen Display.
-    * **Home** - bring the On Screen Display back after hiding it.
+    * **Shift+Alt+Right** - increase the value by the smallest amount.
 **Up Arrow**
     Highlight previous UI menu option.
 **Down Arrow**
@@ -59,10 +59,12 @@ and saving/loading save states.
     Change current UI option setting when an arrow is present on it.
 **Right Arrow**
     Change current UI option setting when an arrow is present on it.
-**Home**
-    Highlight first UI menu option.
-**End**
-    Select last UI menu option.
+**Home**/**End**
+    Highlight first or last UI menu option.
+**[** **]**
+    Move to previous or next group in UI menus that support it (e.g. move to the
+    inputs for the previous or next device in the **Input Assignments (this
+    System)** menu).
 **Enter**/**Joystick 1 Button 1**
     Select currently highlighted UI menu option.
 **Space**
@@ -70,13 +72,6 @@ and saving/loading save states.
 **Delete**
     Clear/reset to default when highlighting an entry on the input
     configuration, cheat options, and plugin options pages.
-**P**
-    Pauses the emulated machine.
-**Left Shift+P**
-    While paused, advances to next frame. If rewind is enabled, a new rewind
-    save state is also captured.
-**Left Shift+~**
-    While paused, loads the most recent rewind save state.
 **F1**
     Power the machine on for machines that have specific power button behavior.
 **F2**
@@ -93,14 +88,16 @@ and saving/loading save states.
     Use the Enter key to switch between the three modes (palette, graphics, and
     tilemaps).
 
-    Press F4 again to turn off the display.
+    Press F4 again to turn off the viewer.
     The key controls in each mode vary slightly:
 
     Palette/colortable mode:
 
     * **[** **]** - switch between palette devices.
     * **Up**/**Down** - scroll up/down one line at a time.
-    * **Page Up**/**Page Down** - scroll up/down one page at a time.
+    * **Shift+Up**/**Down** - scroll right/left one cell at a time.
+    * **Page Up**/**Page Down** - scroll up/down one page at a time (hold
+      Control or Alt to scroll 10 or 100 pages).
     * **Home**/**End** - move to top/bottom of list.
     * **-**/**+** - increase/decrease the number of colors per row.
     * **0** - restore the default number of colors per row.
@@ -110,12 +107,17 @@ and saving/loading save states.
 
     * **[** **]** - switch between different graphics sets.
     * **Up**/**Down** - scroll up/down one line at a time.
-    * **Page Up**/**Page Down** - scroll up/down one page at a time.
+    * **Shift+Up**/**Down** - scroll right/left one cell at a time.
+    * **Page Up**/**Page Down** - scroll up/down one page at a time (hold
+      Control or Alt to scroll 10 or 100 pages).
     * **Home**/**End** - move to top/bottom of list.
-    * **Left**/**Right** - change color displayed.
+    * **Left**/**Right** - change color displayed (hold Control or Alt for
+      wider control).
     * **R** - rotate tiles 90 degrees clockwise.
-    * **-**/**+** - increase/decrease the number of tiles per row.
-    * **0** - restore the default number of tiles per row.
+    * **-**/**+** - increase/decrease the number of tiles per row (hold Shift
+      to restrict to integer scale factors).
+    * **0** - restore the default number of tiles per row (hold Shift to
+      restrict to integer scale factors).
     * **Enter** - switch to tilemap viewer.
 
     Tilemap mode:
@@ -130,18 +132,20 @@ and saving/loading save states.
     * **Enter** - switch to palette/colortable mode.
 
     Note: Not all systems have decoded graphics and/or tilemaps.
-**Left Ctrl+F5**
-    Toggle Filter.
-    (*SDL MAME only*)
-**Left Alt+Left Ctrl+F5**
-    Toggle HLSL Post-Processing.
-    (*Windows non-SDL MAME only*)
+**Left Shift+F4**
+    While paused, loads the most recent rewind save state.
+**F5**
+    Pauses the emulated machine.
+**Left Shift+F5**
+    While paused, advances to next frame. If rewind is enabled, a new rewind
+    save state is also captured.
 **F6**
-    Toggle cheat mode. (if started with “-cheat”)
-**Left Ctrl+F6**
-    Decrease Prescaling.
-**Left Ctrl+F7**
-    Increase Prescaling.
+    Create a save state. Requires an additional keypress to identify the state,
+    similar to the load option above. If an existing save state is present, it
+    will also appear in the selection menu to allow overwriting of that save
+    state.
+**Left Shift+F6**
+    Create a quick save state.
 **F7**
     Load a save state. You will be prompted to press a key or select from the
     menu to determine which save state you wish to load.
@@ -151,16 +155,27 @@ and saving/loading save states.
     receive a warning that the save state may not be valid when attempting to
     save or load.*
 **Left Shift+F7**
-    Create a save state. Requires an additional keypress to identify the state,
-    similar to the load option above. If an existing save state is present, it
-    will also appear in the selection menu to allow overwriting of that save
-    state.
+    Load a quick save state.
 **F8**
     Decrease frame skipping on the fly.
+**Left Shift+F8**
+    Toggle cheat mode. (if started with “-cheat”)
+**Left Alt+F8**
+    Decrease Prescaling.
+    (*SDL MAME only*)
 **F9**
     Increase frame skipping on the fly.
+**Left Alt+F9**
+    Increase Prescaling.
+    (*SDL MAME only*)
 **F10**
     Toggle speed throttling.
+**Left Alt+F10**
+    Toggle HLSL Post-Processing.
+    (*Windows non-SDL MAME only*)
+**Left Alt+F10**
+    Toggle Filter.
+    (*SDL MAME only*)
 **F11**
     Toggles speed display.
 **Left Shift+F11**
@@ -175,14 +190,9 @@ and saving/loading save states.
     Begin recording AVI video.
 **Left Alt+F12**
     Take HLSL Rendered Snapshot.
-**Insert**
+**Insert** (Windows non-SDL MAME)/**Page Down** (SDL MAME)
     Fast forward. While held, runs game with throttling disabled and with the
     maximum frameskip.
-    (*Windows non-SDL MAME only*)
-**Page Down**
-    Fast forward. While held, runs game with throttling disabled and with the
-    maximum frameskip.
-    (*SDL MAME only*)
 **Left Alt+Enter**
     Toggles between full-screen and windowed mode.
 **Scroll Lock**/**Forward Delete** (Mac Desktop)/**fn-Delete** (Mac Laptop)
@@ -533,7 +543,7 @@ This list shows the standard keyboard configuration.
     Player 1 Hanafuda No
 **O**
     Player 1 Taiwanese Mahjong O
-**Semicolon**
+**P**
     Player 1 Taiwanese Mahjong P
 **Q**
     Player 1 Taiwanese Mahjong Q
@@ -577,6 +587,7 @@ buttons.
     navigate the internal operator service menus)
 **0** *(not numeric keypad)*
     Service 2
+
     Book-Keeping (for machines that have this functionality)
 **-** *(not numeric keypad)*
     Service 3
@@ -590,25 +601,25 @@ buttons.
     Deal
 **L**
     Stand
-**4** *(not numeric keypad)*
-    Take Score
-
-    For games that allow gambling winnings in a double-or-nothing bonus game,
-    this takes the winnings from the main game.
-**3** *(not numeric keypad)*
+**D**
     Double Up
 
     For games that allow gambling winnings in a double-or-nothing bonus game,
     this gambles the winnings from the main game in the bonus game.
-**D**
+**F**
     Half Gamble
 
     Used by games that allow gambling half or all of the winnings from the main
-    game in the bonus game.
+    game in the bonus game, this stakes half the winnings from the main game.
+**G**
+    Take Score
+
+    For games that allow gambling winnings in a double-or-nothing bonus game,
+    this stakes the winnings from the main game.
 **A**
-    High
+    High/big
 **S**
-    Low
+    Low/small
 **O**
     Door
 
@@ -703,8 +714,8 @@ All the keys below are fully configurable in the user interface. This list shows
 the standard keyboard configuration.
 
 Note that controls can vary widely by computer type, so not all keys are shown
-here. See the “Input (this Machine)” section of MAME’s configuration menu for
-details for the machine you are currently using.
+here. See the **Input Assignments (this system)** section of MAME’s Input
+Settings menu for details for the machine you are currently using.
 
 
 **Tab**
@@ -739,5 +750,5 @@ All the keys are fully configurable in the user interface.
 
 Note that controls can vary widely by machine type, so default keys are not
 shown here and defaults will vary considerably based on the manufacturer and
-style. See the “Input (this Machine)” section of MAME’s configuration menu for
-details for the machine you are currently using.
+style. See the **Input Assignments (this system)** section of MAME’s Input
+Settings menu for details for the machine you are currently using.

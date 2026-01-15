@@ -22,6 +22,7 @@ public:
 
 	auto irq_callback() { return m_irq_callback.bind(); }
 	auto dma_end() { return m_dma_end.bind(); }
+	auto own() { return m_own.bind(); }
 	template <int Ch> auto dma_read() { return m_dma_read[Ch].bind(); }
 	template <int Ch> auto dma_write() { return m_dma_write[Ch].bind(); }
 
@@ -43,10 +44,14 @@ public:
 
 	uint16_t read(offs_t offset);
 	void write(offs_t offset, uint16_t data, uint16_t mem_mask = ~0);
-	DECLARE_WRITE_LINE_MEMBER(drq0_w);
-	DECLARE_WRITE_LINE_MEMBER(drq1_w);
-	DECLARE_WRITE_LINE_MEMBER(drq2_w);
-	DECLARE_WRITE_LINE_MEMBER(drq3_w);
+	void drq0_w(int state) { drq_w(0, state); }
+	void drq1_w(int state) { drq_w(1, state); }
+	void drq2_w(int state) { drq_w(2, state); }
+	void drq3_w(int state) { drq_w(3, state); }
+	void pcl0_w(int state) { pcl_w(0, state); }
+	void pcl1_w(int state) { pcl_w(1, state); }
+	void pcl2_w(int state) { pcl_w(2, state); }
+	void pcl3_w(int state) { pcl_w(3, state); }
 	uint8_t iack();
 
 	enum {
@@ -58,14 +63,15 @@ public:
 		ERR_NONE= 7
 	};
 	void bec_w(offs_t offset, uint8_t data) { m_bec = data; }
+	void dtack_w(int state) { m_dtack = !state; }
 
 	void single_transfer(int x);
 	void set_timer(int channel, const attotime &tm);
 
 protected:
 	// device-level overrides
-	virtual void device_start() override;
-	virtual void device_reset() override;
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
 
 private:
 	struct hd63450_regs
@@ -92,6 +98,7 @@ private:
 
 	devcb_write_line m_irq_callback;
 	devcb_write8 m_dma_end;
+	devcb_write_line m_own;
 	devcb_read8::array<4> m_dma_read;
 	devcb_write8::array<4> m_dma_write;
 
@@ -109,6 +116,8 @@ private:
 	int8_t m_irq_channel;
 	uint8_t m_bec;
 
+	bool m_dtack;
+
 	// tell if a channel is in use
 	bool dma_in_progress(int channel) const { return (m_reg[channel].csr & 0x08) != 0; }
 
@@ -122,6 +131,9 @@ private:
 	// interrupt helpers
 	void set_irq(int channel);
 	void clear_irq(int channel);
+
+	void drq_w(int channel, int state);
+	void pcl_w(int channel, int state);
 };
 
 DECLARE_DEVICE_TYPE(HD63450, hd63450_device)

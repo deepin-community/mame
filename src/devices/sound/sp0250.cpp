@@ -25,6 +25,7 @@ DEFINE_DEVICE_TYPE(SP0250, sp0250_device, "sp0250", "GI SP0250 LPC")
 sp0250_device::sp0250_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock) :
 	device_t(mconfig, SP0250, tag, owner, clock),
 	device_sound_interface(mconfig, *this),
+	m_timer(nullptr),
 	m_pwm_mode(false),
 	m_pwm_index(PWM_CLOCKS),
 	m_pwm_count(0),
@@ -67,12 +68,12 @@ void sp0250_device::device_start()
 
 	// if a DRQ callback is offered, run a timer at the frame rate
 	// to ensure the DRQ gets picked up in a timely manner
-	m_drq.resolve_safe();
-	if (!m_drq.isnull())
+	if (!m_drq.isunset())
 	{
 		m_drq(ASSERT_LINE);
 		attotime period = attotime::from_hz(frame_rate);
-		timer_alloc()->adjust(period, 0, period);
+		m_timer = timer_alloc(FUNC(sp0250_device::delayed_stream_update), this);
+		m_timer->adjust(period, 0, period);
 	}
 
 	// PWM state
@@ -99,9 +100,13 @@ void sp0250_device::device_start()
 	save_item(NAME(m_fifo_pos));
 }
 
-void sp0250_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void sp0250_device::device_reset()
 {
-	m_stream->update();
+	load_values();
 }
 
 static uint16_t sp0250_ga(uint8_t v)
@@ -171,7 +176,7 @@ void sp0250_device::write(uint8_t data)
 }
 
 
-uint8_t sp0250_device::drq_r()
+int sp0250_device::drq_r()
 {
 	m_stream->update();
 	return (m_fifo_pos == 15) ? CLEAR_LINE : ASSERT_LINE;
@@ -252,18 +257,16 @@ int8_t sp0250_device::next()
 //  sound_stream_update - handle a stream update
 //-------------------------------------------------
 
-void sp0250_device::sound_stream_update(sound_stream &stream, std::vector<read_stream_view> const &inputs, std::vector<write_stream_view> &outputs)
+void sp0250_device::sound_stream_update(sound_stream &stream)
 {
-	auto &output = outputs[0];
-
 	if (!m_pwm_mode)
 	{
-		for (int sampindex = 0; sampindex < output.samples(); sampindex++)
-			output.put_int(sampindex, next(), 128);
+		for (int sampindex = 0; sampindex < stream.samples(); sampindex++)
+			stream.put_int(0, sampindex, next(), 128);
 	}
 	else
 	{
-		for (int sampindex = 0; sampindex < output.samples(); )
+		for (int sampindex = 0; sampindex < stream.samples(); )
 		{
 			// see where we're at in the current PWM cycle
 			if (m_pwm_index >= PWM_CLOCKS)
@@ -277,7 +280,7 @@ void sp0250_device::sound_stream_update(sound_stream &stream, std::vector<read_s
 
 			// determine the value to fill and the number of samples remaining
 			// until it changes
-			stream_buffer::sample_t value;
+			sound_stream::sample_t value;
 			int remaining;
 			if (m_pwm_index < m_pwm_count)
 			{
@@ -291,13 +294,13 @@ void sp0250_device::sound_stream_update(sound_stream &stream, std::vector<read_s
 			}
 
 			// clamp to the number of samples requested and advance the counters
-			if (remaining > output.samples() - sampindex)
-				remaining = output.samples() - sampindex;
+			if (remaining > stream.samples() - sampindex)
+				remaining = stream.samples() - sampindex;
 			m_pwm_index += remaining;
 
 			// fill the output
 			while (remaining-- != 0)
-				outputs[0].put(sampindex++, value);
+				stream.put(0, sampindex++, value);
 		}
 	}
 }

@@ -66,12 +66,7 @@ enum
 class i960_cpu_device :  public cpu_device
 {
 public:
-	// construction/destruction
-	i960_cpu_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
-
-	// call from any read/write handler for a memory area that can't be bursted
-	// on the real hardware (e.g. Model 2's interrupt control registers)
-	void i960_noburst() { m_bursting = 0; }
+	static constexpr uint16_t BURST = 0x0001;
 
 	void i960_stall()
 	{
@@ -80,16 +75,17 @@ public:
 	}
 
 protected:
+	i960_cpu_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock);
+
 	enum { I960_RCACHE_SIZE = 4 };
 
 	// device-level overrides
-	virtual void device_start() override;
-	virtual void device_reset() override;
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
 
 	// device_execute_interface overrides
 	virtual uint32_t execute_min_cycles() const noexcept override { return 1; } /* ???? TODO: Exact timing unknown */
 	virtual uint32_t execute_max_cycles() const noexcept override { return 1; } /* ???? TODO: Exact timing unknown */
-	virtual uint32_t execute_input_lines() const noexcept override { return 4; }
 	virtual void execute_run() override;
 	virtual void execute_set_input(int inputnum, int state) override;
 
@@ -131,11 +127,12 @@ private:
 	uint32_t m_IP;
 	uint32_t m_PIP;
 	uint32_t m_ICR;
-	int m_bursting;
 
 	int m_immediate_irq;
 	int m_immediate_vector;
 	int  m_immediate_pri;
+
+	int8_t m_irq_line_state[4];
 
 	memory_access<32, 2, 0, ENDIANNESS_LITTLE>::cache m_cache;
 	memory_access<32, 2, 0, ENDIANNESS_LITTLE>::specific m_program;
@@ -143,8 +140,10 @@ private:
 	int m_icount;
 
 	uint32_t i960_read_dword_unaligned(uint32_t address);
+	std::pair<uint32_t, uint16_t> i960_read_dword_unaligned_flags(uint32_t address);
 	uint16_t i960_read_word_unaligned(uint32_t address);
 	void i960_write_dword_unaligned(uint32_t address, uint32_t data);
+	uint16_t i960_write_dword_unaligned_flags(uint32_t address, uint32_t data);
 	void i960_write_word_unaligned(uint32_t address, uint16_t data);
 	void send_iac(uint32_t adr);
 	uint32_t get_ea(uint32_t opcode);
@@ -173,16 +172,32 @@ private:
 	void bxx_s(uint32_t opcode, int mask);
 	void fxx(uint32_t opcode, int mask);
 	void test(uint32_t opcode, int mask);
+	double round_to_int(double val);
 	void execute_op(uint32_t opcode);
 	void execute_burst_stall_op(uint32_t opcode);
 	void take_interrupt(int vector, int lvl);
-	void check_irqs();
+	void check_immediate_irqs();
+	void check_pending_irqs();
 	void do_call(uint32_t adr, int type, uint32_t stack);
 	void do_ret_0();
 	void do_ret();
 };
 
+class i80960ka_device : public i960_cpu_device
+{
+public:
+	// construction/destruction
+	i80960ka_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
+};
 
-DECLARE_DEVICE_TYPE(I960, i960_cpu_device)
+class i80960kb_device : public i960_cpu_device
+{
+public:
+	// construction/destruction
+	i80960kb_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
+};
+
+DECLARE_DEVICE_TYPE(I80960KA, i80960ka_device)
+DECLARE_DEVICE_TYPE(I80960KB, i80960kb_device)
 
 #endif // MAME_CPU_I960_I960_H

@@ -184,26 +184,32 @@ offs_t t11_disassembler::disassemble(std::ostream &stream, offs_t pc, const data
 		case 0001000: case 0001100: case 0001200: case 0001300:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BNE   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0001400: case 0001500: case 0001600: case 0001700:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BEQ   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0002000: case 0002100: case 0002200: case 0002300:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BGE   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0002400: case 0002500: case 0002600: case 0002700:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BLT   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0003000: case 0003100: case 0003200: case 0003300:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BGT   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0003400: case 0003500: case 0003600: case 0003700:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BLE   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0004000: case 0004100: case 0004200: case 0004300:
 		case 0004400: case 0004500: case 0004600: case 0004700:
@@ -263,6 +269,10 @@ offs_t t11_disassembler::disassemble(std::ostream &stream, offs_t pc, const data
 			util::stream_format(stream, "ASL   %s", ea1);
 			break;
 		// 0064xx: MARK (not implemented on T-11)
+		case 0006400:
+			ea1 = MakeEA<false> (lo, pc, opcodes);
+			util::stream_format(stream, "MARK  %s", ea1);
+			break;
 		// 0065xx: MFPI (not implemented on T-11)
 		// 0066xx: MTPI (not implemented on T-11)
 		case 0006700:
@@ -347,9 +357,25 @@ offs_t t11_disassembler::disassemble(std::ostream &stream, offs_t pc, const data
 			break;
 
 		// 070xxx: MUL (not implemented on T-11)
+		case 0070000: case 0070100: case 0070200: case 0070300: case 0070400: case 0070500: case 0070600: case 0070700:
+			ea1 = MakeEA<false> (lo, pc, opcodes);
+			util::stream_format(stream, "MUL   %s,%s", ea1, regs[hi & 7]);
+			break;
 		// 071xxx: DIV (not implemented on T-11)
+		case 0071000: case 0071100: case 0071200: case 0071300: case 0071400: case 0071500: case 0071600: case 0071700:
+			ea1 = MakeEA<false> (lo, pc, opcodes);
+			util::stream_format(stream, "DIV   %s,%s", ea1, regs[hi & 7]);
+			break;
 		// 072xxx: ASH (not implemented on T-11)
+		case 0072000: case 0072100: case 0072200: case 0072300: case 0072400: case 0072500: case 0072600: case 0072700:
+			ea1 = MakeEA<false> (lo, pc, opcodes);
+			util::stream_format(stream, "ASH   %s,%s", ea1, regs[hi & 7]);
+			break;
 		// 073xxx: ASHC (not implemented on T-11)
+		case 0073000: case 0073100: case 0073200: case 0073300: case 0073400: case 0073500: case 0073600: case 0073700:
+			ea1 = MakeEA<false> (lo, pc, opcodes);
+			util::stream_format(stream, "ASHC  %s,%s", ea1, regs[hi & 7]);
+			break;
 		case 0074000: case 0074100: case 0074200: case 0074300: case 0074400: case 0074500: case 0074600: case 0074700:
 			ea1 = MakeEA<false> (lo, pc, opcodes);
 			util::stream_format(stream, "XOR   %s,%s", regs[hi & 7], ea1);
@@ -359,39 +385,48 @@ offs_t t11_disassembler::disassemble(std::ostream &stream, offs_t pc, const data
 		case 0077000: case 0077100: case 0077200: case 0077300: case 0077400: case 0077500: case 0077600: case 0077700:
 			addr = (pc - 2 * lo) & 0177777;
 			util::stream_format(stream, "SOB   %s,%06o", regs[hi & 7], addr);
+			flags = STEP_COND;
 			break;
 
 		case 0100000: case 0100100: case 0100200: case 0100300:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BPL   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0100400: case 0100500: case 0100600: case 0100700:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BMI   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0101000: case 0101100: case 0101200: case 0101300:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BHI   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0101400: case 0101500: case 0101600: case 0101700:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BLOS  %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0102000: case 0102100: case 0102200: case 0102300:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BVC   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0102400: case 0102500: case 0102600: case 0102700:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BVS   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0103000: case 0103100: case 0103200: case 0103300:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BCC   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0103400: case 0103500: case 0103600: case 0103700:
 			offset = 2 * (int8_t)(op & 0377);
 			util::stream_format(stream, "BCS   %06o", (pc + offset) & 0177777);
+			flags = STEP_COND;
 			break;
 		case 0104000: case 0104100: case 0104200: case 0104300:
 			util::stream_format(stream, "EMT   %03o", op & 0377);

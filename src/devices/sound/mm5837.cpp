@@ -43,11 +43,8 @@ mm5837_device::mm5837_device(const machine_config &mconfig, const char *tag, dev
 
 void mm5837_device::device_start()
 {
-	// resolve callbacks
-	m_output_cb.resolve_safe();
-
 	// get timer
-	m_timer = timer_alloc(0);
+	m_timer = timer_alloc(FUNC(mm5837_device::update_clock_output), this);
 
 	// register for save states
 	save_item(NAME(m_source.m_shift));
@@ -70,10 +67,10 @@ void mm5837_device::device_reset()
 
 
 //-------------------------------------------------
-//  device_timer - handle timer callbacks
+//  update_clock_output -
 //-------------------------------------------------
 
-void mm5837_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+TIMER_CALLBACK_MEMBER(mm5837_device::update_clock_output)
 {
 	m_output_cb(m_source.clock());
 }
@@ -112,8 +109,8 @@ void mm5837_stream_device::device_start()
 //  sound_stream_update - fill the sound buffer
 //-------------------------------------------------
 
-void mm5837_stream_device::sound_stream_update(sound_stream &stream, std::vector<read_stream_view> const &inputs, std::vector<write_stream_view> &outputs)
+void mm5837_stream_device::sound_stream_update(sound_stream &stream)
 {
-	for (int sampindex = 0; sampindex < outputs[0].samples(); sampindex++)
-		outputs[0].put(sampindex, m_source.clock() ? 1.0 : 0.0);
+	for (int sampindex = 0; sampindex < stream.samples(); sampindex++)
+		stream.put(0, sampindex, m_source.clock() ? 1.0 : 0.0);
 }

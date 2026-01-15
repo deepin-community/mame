@@ -9,7 +9,6 @@
 #include "emu.h"
 #include "fdc.h"
 #include "machine/busmouse.h"
-#include "formats/pc_dsk.h"
 #include "formats/naslite_dsk.h"
 #include "formats/ibmxdf_dsk.h"
 
@@ -30,6 +29,12 @@ static void pc_dd_floppies(device_slot_interface &device)
 	device.option_add("35dd", FLOPPY_35_DD);
 }
 
+static void pc_qd_floppies(device_slot_interface &device)
+{
+	device.option_add("525dd", FLOPPY_525_DD);
+	device.option_add("525qd", FLOPPY_525_QD);
+}
+
 static void pc_hd_floppies(device_slot_interface &device)
 {
 	device.option_add("525hd", FLOPPY_525_HD);
@@ -46,12 +51,12 @@ isa8_fdc_device::isa8_fdc_device(const machine_config &mconfig, device_type type
 {
 }
 
-WRITE_LINE_MEMBER( isa8_fdc_device::irq_w )
+void isa8_fdc_device::irq_w(int state)
 {
 	m_isa->irq6_w(state ? ASSERT_LINE : CLEAR_LINE);
 }
 
-WRITE_LINE_MEMBER( isa8_fdc_device::drq_w )
+void isa8_fdc_device::drq_w(int state)
 {
 	m_isa->drq2_w(state ? ASSERT_LINE : CLEAR_LINE);
 }
@@ -148,13 +153,13 @@ uint8_t isa8_upd765_fdc_device::dir_r()
 	return 0x00;
 }
 
-WRITE_LINE_MEMBER(isa8_upd765_fdc_device::fdc_irq_w)
+void isa8_upd765_fdc_device::fdc_irq_w(int state)
 {
 	fdc_irq = state;
 	check_irq();
 }
 
-WRITE_LINE_MEMBER(isa8_upd765_fdc_device::fdc_drq_w)
+void isa8_upd765_fdc_device::fdc_drq_w(int state)
 {
 	fdc_drq = state;
 	check_drq();
@@ -192,8 +197,8 @@ void isa8_fdc_xt_device::device_add_mconfig(machine_config &config)
 	upd765a_device &upd765a(UPD765A(config, m_fdc, 8'000'000, false, false));
 	upd765a.intrq_wr_callback().set(FUNC(isa8_fdc_xt_device::fdc_irq_w));
 	upd765a.drq_wr_callback().set(FUNC(isa8_fdc_xt_device::fdc_drq_w));
-	FLOPPY_CONNECTOR(config, "fdc:0", pc_dd_floppies, "525dd", isa8_fdc_device::floppy_formats);
-	FLOPPY_CONNECTOR(config, "fdc:1", pc_dd_floppies, "525dd", isa8_fdc_device::floppy_formats);
+	FLOPPY_CONNECTOR(config, "fdc:0", pc_dd_floppies, "525dd", isa8_fdc_device::floppy_formats).enable_sound(true);
+	FLOPPY_CONNECTOR(config, "fdc:1", pc_dd_floppies, "525dd", isa8_fdc_device::floppy_formats).enable_sound(true);
 }
 
 void isa8_fdc_xt_device::device_start()
@@ -231,8 +236,8 @@ void isa8_fdc_at_device::device_add_mconfig(machine_config &config)
 	upd765a_device &upd765a(UPD765A(config, m_fdc, 8'000'000, false, false));
 	upd765a.intrq_wr_callback().set(FUNC(isa8_fdc_at_device::fdc_irq_w));
 	upd765a.drq_wr_callback().set(FUNC(isa8_fdc_at_device::fdc_drq_w));
-	FLOPPY_CONNECTOR(config, "fdc:0", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats);
-	FLOPPY_CONNECTOR(config, "fdc:1", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats);
+	FLOPPY_CONNECTOR(config, "fdc:0", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats).enable_sound(true);
+	FLOPPY_CONNECTOR(config, "fdc:1", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats).enable_sound(true);
 }
 
 // Decoding is through a PAL, so presumably complete
@@ -261,8 +266,8 @@ void isa8_fdc_smc_device::device_add_mconfig(machine_config &config)
 	smc37c78_device &smc(SMC37C78(config, m_fdc, 24'000'000));
 	smc.intrq_wr_callback().set(FUNC(isa8_fdc_device::irq_w));
 	smc.drq_wr_callback().set(FUNC(isa8_fdc_device::drq_w));
-	FLOPPY_CONNECTOR(config, "fdc:0", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats);
-	FLOPPY_CONNECTOR(config, "fdc:1", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats);
+	FLOPPY_CONNECTOR(config, "fdc:0", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats).enable_sound(true);
+	FLOPPY_CONNECTOR(config, "fdc:1", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats).enable_sound(true);
 }
 
 void isa8_fdc_smc_device::device_start()
@@ -282,8 +287,8 @@ void isa8_fdc_ps2_device::device_add_mconfig(machine_config &config)
 	n82077aa.set_mode(n82077aa_device::mode_t::PS2);
 	n82077aa.intrq_wr_callback().set(FUNC(isa8_fdc_device::irq_w));
 	n82077aa.drq_wr_callback().set(FUNC(isa8_fdc_device::drq_w));
-	FLOPPY_CONNECTOR(config, "fdc:0", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats);
-	FLOPPY_CONNECTOR(config, "fdc:1", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats);
+	FLOPPY_CONNECTOR(config, "fdc:0", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats).enable_sound(true);
+	FLOPPY_CONNECTOR(config, "fdc:1", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats).enable_sound(true);
 }
 
 void isa8_fdc_ps2_device::device_start()
@@ -302,8 +307,8 @@ void isa8_fdc_superio_device::device_add_mconfig(machine_config &config)
 	pc_fdc_superio_device &superio(PC_FDC_SUPERIO(config, m_fdc, 24'000'000));
 	superio.intrq_wr_callback().set(FUNC(isa8_fdc_device::irq_w));
 	superio.drq_wr_callback().set(FUNC(isa8_fdc_device::drq_w));
-	FLOPPY_CONNECTOR(config, "fdc:0", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats);
-	FLOPPY_CONNECTOR(config, "fdc:1", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats);
+	FLOPPY_CONNECTOR(config, "fdc:0", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats).enable_sound(true);
+	FLOPPY_CONNECTOR(config, "fdc:1", pc_hd_floppies, "35hd", isa8_fdc_device::floppy_formats).enable_sound(true);
 }
 
 void isa8_fdc_superio_device::device_start()
@@ -325,16 +330,13 @@ void isa8_ec1841_0003_device::device_start()
 	m_isa->install_device(0x023c, 0x023f, *m_bus_mouse, &bus_mouse_device::map);
 }
 
-WRITE_LINE_MEMBER( isa8_ec1841_0003_device::aux_irq_w )
-{
-	m_isa->irq4_w(state ? ASSERT_LINE : CLEAR_LINE);
-}
-
 void isa8_ec1841_0003_device::device_add_mconfig(machine_config &config)
 {
 	isa8_fdc_xt_device::device_add_mconfig(config);
+	FLOPPY_CONNECTOR(config.replace(), "fdc:0", pc_qd_floppies, "525dd", isa8_fdc_device::floppy_formats).enable_sound(true);
+	FLOPPY_CONNECTOR(config.replace(), "fdc:1", pc_qd_floppies, "525dd", isa8_fdc_device::floppy_formats).enable_sound(true);
 
-	BUS_MOUSE(config, "bus_mouse", 0).extint_callback().set(FUNC(isa8_ec1841_0003_device::aux_irq_w));
+	BUS_MOUSE(config, "bus_mouse", 0).extint_callback().set([this] (int state) { m_isa->irq4_w(state); });
 }
 
 

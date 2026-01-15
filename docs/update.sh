@@ -7,12 +7,13 @@ REMOTE=$(git rev-parse @{u})
 BASE=$(git merge-base @ @{u})
 
 if [ $LOCAL = $REMOTE ]; then
-    echo "Up-to-date"
+    /bin/true
 elif [ $LOCAL = $BASE ]; then
     echo "Need to pull"
     git pull
     make clean
-    make site
+    # The environment variable added here adds bottom left download pane.
+    MAMEDEV=1 make site
 elif [ $REMOTE = $BASE ]; then
     echo "Need to push"
 else
