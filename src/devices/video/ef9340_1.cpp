@@ -16,8 +16,6 @@ This is implemented with a callback. The datasheet explains how to hook up
 TODO:
 - busy state (right now it is immediate)
 - internal display timing (on g7400, most of it is done externally)
-- window boxing
-- Y zoom
 - RES(restart) pin
 
 ***************************************************************************/
@@ -35,14 +33,15 @@ TODO:
 DEFINE_DEVICE_TYPE(EF9340_1, ef9340_1_device, "ef9340_1", "Thomson EF9340+EF9341")
 
 
-ef9340_1_device::ef9340_1_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock)
-	: device_t(mconfig, EF9340_1, tag, owner, clock)
-	, device_video_interface(mconfig, *this)
-	, m_charset(*this, "ef9340_1")
-	, m_write_exram(*this)
-	, m_read_exram(*this)
-{
-}
+ef9340_1_device::ef9340_1_device(const machine_config &mconfig, const char *tag, device_t *owner, u32 clock) :
+	device_t(mconfig, EF9340_1, tag, owner, clock),
+	device_video_interface(mconfig, *this),
+	m_charset(*this, "ef9340_1"),
+	m_offset_x(0),
+	m_offset_y(0),
+	m_write_exram(*this),
+	m_read_exram(*this, 0xff)
+{ }
 
 
 ROM_START( ef9340_1 )
@@ -59,16 +58,13 @@ const tiny_rom_entry *ef9340_1_device::device_rom_region() const
 
 void ef9340_1_device::device_start()
 {
-	m_write_exram.resolve_safe();
-	m_read_exram.resolve_safe(0xff);
-
 	// let the screen create our temporary bitmap with the screen's dimensions
 	screen().register_screen_bitmap(m_tmp_bitmap);
 
-	m_line_timer = timer_alloc(TIMER_LINE);
+	m_line_timer = timer_alloc(FUNC(ef9340_1_device::draw_scanline), this);
 	m_line_timer->adjust(screen().time_until_pos(0, 0), 0, screen().scan_period());
 
-	m_blink_timer = timer_alloc(TIMER_BLINK);
+	m_blink_timer = timer_alloc(FUNC(ef9340_1_device::blink_update), this);
 	m_blink_timer->adjust(screen().time_until_pos(0, 0), 0, screen().frame_period());
 
 	// zerofill
@@ -107,25 +103,15 @@ void ef9340_1_device::device_start()
 }
 
 
-void ef9340_1_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+TIMER_CALLBACK_MEMBER(ef9340_1_device::blink_update)
 {
-	switch (id)
-	{
-		case TIMER_LINE:
-			ef9340_scanline(screen().vpos());
-			break;
+	// blink rate is approximately 0.5s
+	m_ef9340.blink_prescaler = (m_ef9340.blink_prescaler + 1) & 0x1f;
+	if (m_ef9340.R & 0x40 && m_ef9340.blink_prescaler == 24)
+		m_ef9340.blink_prescaler = 0;
 
-		case TIMER_BLINK:
-			// blink rate is approximately 0.5s
-			m_ef9340.blink_prescaler = (m_ef9340.blink_prescaler + 1) & 0x1f;
-			if (m_ef9340.R & 0x40 && m_ef9340.blink_prescaler == 24)
-				m_ef9340.blink_prescaler = 0;
-
-			if (m_ef9340.blink_prescaler == 0)
-				m_ef9340.blink = !m_ef9340.blink;
-
-			break;
-	}
+	if (m_ef9340.blink_prescaler == 0)
+		m_ef9340.blink = !m_ef9340.blink;
 }
 
 
@@ -321,13 +307,18 @@ u8 ef9340_1_device::ef9341_read(u8 command, u8 b)
 }
 
 
-void ef9340_1_device::ef9340_scanline(int vpos)
+TIMER_CALLBACK_MEMBER(ef9340_1_device::draw_scanline)
 {
+	int vpos = screen().vpos();
 	vpos -= m_offset_y;
 	if (vpos < 0)
 		return;
 
+	int zoom = (m_ef9340.Y0 & 0x20 && vpos >= 10) ? 2 : 1;
 	int slice = vpos % 10;
+	if (zoom == 2)
+		slice = ((vpos - 10) % 20) / 2;
+
 	bool dh = false;
 	if (vpos == 0)
 		m_ef9340.h_parity = false;
@@ -341,8 +332,9 @@ void ef9340_1_device::ef9340_scanline(int vpos)
 		u16 char_data = 0x00;
 		u8 fg = 0;
 		u8 bg = 0;
+		bool conceal = false;
+		bool box = bool(m_ef9340.R & 0x02);
 		bool underline = false;
-		bool blank = false;
 		bool w_parity = false;
 
 		if (vpos < 10)
@@ -364,7 +356,7 @@ void ef9340_1_device::ef9340_scanline(int vpos)
 		else
 		{
 			// displaying regular row
-			y_row = ((m_ef9340.Y0 & 0x1f) + (vpos - 10) / 10) % 24;
+			y_row = ((m_ef9340.Y0 & 0x1f) + (vpos - 10) / (10 * zoom)) % 24;
 		}
 
 		for (int x = 0; x < 40; x++)
@@ -465,14 +457,15 @@ void ef9340_1_device::ef9340_scanline(int vpos)
 
 			for (int i = 0; i < 8; i++)
 			{
-				u16 d = blank ? 0 : (char_data & 1) ? fg : bg;
-				m_tmp_bitmap.pix(m_offset_y + vpos, m_offset_x + x*8 + i) = d | 8;
+				u16 d = (conceal || box) ? 0 : (char_data & 1) ? fg : bg;
+				m_tmp_bitmap.pix(m_offset_y + vpos, m_offset_x + x*8 + i) = d | (box ? 0 : 8);
 				char_data >>= 1;
 			}
 
 			if (del)
 			{
-				blank = m_ef9340.R & 0x04 && b & 0x01;
+				conceal = b & 0x01 && (m_ef9340.R & 0x04);
+				box = !(b & 0x02) && (m_ef9340.R & 0x02);
 				underline = bool(b & 0x04);
 			}
 		}
@@ -484,7 +477,7 @@ void ef9340_1_device::ef9340_scanline(int vpos)
 	}
 
 	// determine next h parity
-	if (vpos >= 10 && slice == 9)
+	if (vpos >= 10 && vpos & 1 && slice == 9)
 	{
 		if (dh)
 			m_ef9340.h_parity = !m_ef9340.h_parity;

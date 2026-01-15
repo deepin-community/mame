@@ -32,25 +32,106 @@
 #include "emu.h"
 #include "pointer.h"
 
-//**************************************************************************
-//  DEVICE DEFINITIONS
-//**************************************************************************
 
-DEFINE_DEVICE_TYPE(BBC_AMXMOUSE,  bbc_amxmouse_device,  "bbc_amxmouse",  "AMX Mouse (BBC Micro)")
-DEFINE_DEVICE_TYPE(BBC_M512MOUSE, bbc_m512mouse_device, "bbc_m512mouse", "Acorn Master 512 Mouse")
-DEFINE_DEVICE_TYPE(BBC_TRACKER,   bbc_tracker_device,   "bbc_tracker",   "Marconi RB2 Tracker Ball")
+namespace {
+
+class bbc_pointer_device : public device_t, public device_bbc_userport_interface
+{
+protected:
+	bbc_pointer_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock)
+		: device_t(mconfig, type, tag, owner, clock)
+		, device_bbc_userport_interface(mconfig, *this)
+		, m_pointer_x(*this, "POINTER_X")
+		, m_pointer_y(*this, "POINTER_Y")
+		, m_buttons(*this, "BUTTONS")
+	{
+	}
+
+	// device_t overrides
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
+
+	TIMER_CALLBACK_MEMBER(update);
+
+	required_ioport m_pointer_x;
+	required_ioport m_pointer_y;
+	required_ioport m_buttons;
+
+	// quadrature output
+	int m_xdir, m_ydir;
+
+	// internal quadrature state
+	int m_x, m_y;
+	int m_phase_x, m_phase_y;
+
+	emu_timer *m_pointer_timer;
+};
+
+
+// ======================> bbc_amxmouse_device
+
+class bbc_amxmouse_device : public bbc_pointer_device
+{
+public:
+	bbc_amxmouse_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
+		: bbc_pointer_device(mconfig, BBC_AMXMOUSE, tag, owner, clock)
+	{
+	}
+
+protected:
+	uint8_t pb_r() override;
+
+	// optional information overrides
+	virtual ioport_constructor device_input_ports() const override ATTR_COLD;
+};
+
+
+// ======================> bbc_m512mouse_device
+
+class bbc_m512mouse_device : public bbc_pointer_device
+{
+public:
+	bbc_m512mouse_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
+		: bbc_pointer_device(mconfig, BBC_M512MOUSE, tag, owner, clock)
+	{
+	}
+
+protected:
+	uint8_t pb_r() override;
+
+	// optional information overrides
+	virtual ioport_constructor device_input_ports() const override ATTR_COLD;
+};
+
+
+// ======================> bbc_tracker_device
+
+class bbc_tracker_device : public bbc_pointer_device
+{
+public:
+	bbc_tracker_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
+		: bbc_pointer_device(mconfig, BBC_TRACKER, tag, owner, clock)
+	{
+	}
+
+protected:
+	uint8_t pb_r() override;
+
+	// optional information overrides
+	virtual ioport_constructor device_input_ports() const override ATTR_COLD;
+};
 
 
 //-------------------------------------------------
-//  INPUT_PORTS( amxmouse )
+//  input_ports - device-specific input ports
 //-------------------------------------------------
 
 static INPUT_PORTS_START( amxmouse )
 	PORT_START("POINTER_X")
-	PORT_BIT(0xff, 0x00, IPT_MOUSE_X) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_CHANGED_MEMBER(DEVICE_SELF, bbc_pointer_device, pointer_changed, 0) PORT_RESET
+	PORT_BIT(0xff, 0x00, IPT_MOUSE_X) PORT_SENSITIVITY(100)
 
 	PORT_START("POINTER_Y")
-	PORT_BIT(0xff, 0x00, IPT_MOUSE_Y) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_CHANGED_MEMBER(DEVICE_SELF, bbc_pointer_device, pointer_changed, 0) PORT_RESET
+	PORT_BIT(0xff, 0x00, IPT_MOUSE_Y) PORT_SENSITIVITY(100)
 
 	PORT_START("BUTTONS")
 	PORT_BIT(0x20, IP_ACTIVE_LOW, IPT_BUTTON1) PORT_NAME("Mouse Left Button (Execute)") PORT_CODE(MOUSECODE_BUTTON1)
@@ -59,16 +140,12 @@ static INPUT_PORTS_START( amxmouse )
 INPUT_PORTS_END
 
 
-//-------------------------------------------------
-//  INPUT_PORTS( m512mouse )
-//-------------------------------------------------
-
 static INPUT_PORTS_START( m512mouse )
 	PORT_START("POINTER_X")
-	PORT_BIT(0xff, 0x00, IPT_MOUSE_X) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_CHANGED_MEMBER(DEVICE_SELF, bbc_pointer_device, pointer_changed, 0) PORT_RESET
+	PORT_BIT(0xff, 0x00, IPT_MOUSE_X) PORT_SENSITIVITY(100)
 
 	PORT_START("POINTER_Y")
-	PORT_BIT(0xff, 0x00, IPT_MOUSE_Y) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_CHANGED_MEMBER(DEVICE_SELF, bbc_pointer_device, pointer_changed, 0) PORT_RESET
+	PORT_BIT(0xff, 0x00, IPT_MOUSE_Y) PORT_SENSITIVITY(100)
 
 	PORT_START("BUTTONS")
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_BUTTON1) PORT_NAME("Mouse Left Button") PORT_CODE(MOUSECODE_BUTTON1)
@@ -76,16 +153,13 @@ static INPUT_PORTS_START( m512mouse )
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_BUTTON2) PORT_NAME("Mouse Right Button") PORT_CODE(MOUSECODE_BUTTON2)
 INPUT_PORTS_END
 
-//-------------------------------------------------
-//  INPUT_PORTS( tracker )
-//-------------------------------------------------
 
 static INPUT_PORTS_START( tracker )
 	PORT_START("POINTER_X")
-	PORT_BIT(0xff, 0x00, IPT_TRACKBALL_X) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_CHANGED_MEMBER(DEVICE_SELF, bbc_pointer_device, pointer_changed, 0) PORT_RESET
+	PORT_BIT(0xff, 0x00, IPT_TRACKBALL_X) PORT_SENSITIVITY(100)
 
 	PORT_START("POINTER_Y")
-	PORT_BIT(0xff, 0x00, IPT_TRACKBALL_Y) PORT_SENSITIVITY(100) PORT_KEYDELTA(5) PORT_CHANGED_MEMBER(DEVICE_SELF, bbc_pointer_device, pointer_changed, 0) PORT_RESET
+	PORT_BIT(0xff, 0x00, IPT_TRACKBALL_Y) PORT_SENSITIVITY(100)
 
 	PORT_START("BUTTONS")
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_BUTTON1) PORT_NAME("Left Button") PORT_CODE(MOUSECODE_BUTTON1)
@@ -93,9 +167,6 @@ static INPUT_PORTS_START( tracker )
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_BUTTON2) PORT_NAME("Right Button") PORT_CODE(MOUSECODE_BUTTON2)
 INPUT_PORTS_END
 
-//-------------------------------------------------
-//  input_ports - device-specific input ports
-//-------------------------------------------------
 
 ioport_constructor bbc_amxmouse_device::device_input_ports() const
 {
@@ -112,38 +183,6 @@ ioport_constructor bbc_tracker_device::device_input_ports() const
 	return INPUT_PORTS_NAME( tracker );
 }
 
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-//-------------------------------------------------
-//  bbc_pointer_device - constructor
-//-------------------------------------------------
-
-bbc_pointer_device::bbc_pointer_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock)
-	: device_t(mconfig, type, tag, owner, clock)
-	, device_bbc_userport_interface(mconfig, *this)
-	, m_pointer_x(*this, "POINTER_X")
-	, m_pointer_y(*this, "POINTER_Y")
-	, m_buttons(*this, "BUTTONS")
-{
-}
-
-bbc_amxmouse_device::bbc_amxmouse_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
-	: bbc_pointer_device(mconfig, BBC_AMXMOUSE, tag, owner, clock)
-{
-}
-
-bbc_m512mouse_device::bbc_m512mouse_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
-	: bbc_pointer_device(mconfig, BBC_M512MOUSE, tag, owner, clock)
-{
-}
-
-bbc_tracker_device::bbc_tracker_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
-	: bbc_pointer_device(mconfig, BBC_TRACKER, tag, owner, clock)
-{
-}
-
 
 //-------------------------------------------------
 //  device_start - device-specific startup
@@ -151,8 +190,7 @@ bbc_tracker_device::bbc_tracker_device(const machine_config &mconfig, const char
 
 void bbc_pointer_device::device_start()
 {
-	m_pointer_timer = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(bbc_pointer_device::pointer_poll), this));
-	m_pointer_timer->adjust(attotime::zero, 0, attotime::from_hz(1400));
+	m_pointer_timer = timer_alloc(FUNC(bbc_pointer_device::update), this);
 }
 
 
@@ -164,12 +202,12 @@ void bbc_pointer_device::device_reset()
 {
 	m_xdir = 0;
 	m_ydir = 0;
-	m_direction_x = 0;
-	m_direction_y = 0;
-	m_distance_x = 0;
-	m_distance_y = 0;
+	m_x = 0;
+	m_y = 0;
 	m_phase_x = 0;
 	m_phase_y = 0;
+
+	m_pointer_timer->adjust(attotime::zero, 0, attotime::from_hz(1400));
 }
 
 
@@ -177,25 +215,16 @@ void bbc_pointer_device::device_reset()
 //  IMPLEMENTATION
 //**************************************************************************
 
-INPUT_CHANGED_MEMBER(bbc_pointer_device::pointer_changed)
+TIMER_CALLBACK_MEMBER(bbc_pointer_device::update)
 {
 	int x = m_pointer_x->read();
 	int y = m_pointer_y->read();
-	x -= (x & 0x80) ? 0x100 : 0;
-	y -= (y & 0x80) ? 0x100 : 0;
 
-	// Set the mouse movement direction and record the movement units
-	m_direction_x = (x > 0) ? 1 : 0;
-	m_distance_x = abs(x);
+	int dx = x - m_x;
+	int dy = y - m_y;
 
-	m_direction_y = (y > 0) ? 1 : 0;
-	m_distance_y = abs(y);
-}
-
-TIMER_CALLBACK_MEMBER(bbc_pointer_device::pointer_poll)
-{
 	// Process X output
-	if (m_distance_x)
+	if (dx)
 	{
 		// Set the output pins according to the current phase
 		switch (m_phase_x)
@@ -215,20 +244,17 @@ TIMER_CALLBACK_MEMBER(bbc_pointer_device::pointer_poll)
 		}
 
 		// Change phase
-		if (m_direction_x == 0)
-			m_phase_x--;
-		else
+		if (dx > 0)
 			m_phase_x++;
-
-		// Decrement the distance left to move
-		m_distance_x--;
+		else
+			m_phase_x--;
 
 		// Range check the phase
 		m_phase_x &= 3;
 	}
 
 	// Process Y output
-	if (m_distance_y)
+	if (dy)
 	{
 		// Set the output pins according to the current phase
 		switch (m_phase_y)
@@ -248,17 +274,17 @@ TIMER_CALLBACK_MEMBER(bbc_pointer_device::pointer_poll)
 		}
 
 		// Change phase
-		if (m_direction_y == 0)
-			m_phase_y--;
-		else
+		if (dy > 0)
 			m_phase_y++;
-
-		// Decrement the distance left to move
-		m_distance_y--;
+		else
+			m_phase_y--;
 
 		// Range check the phase
 		m_phase_y &= 3;
 	}
+
+	m_x = x;
+	m_y = y;
 }
 
 uint8_t bbc_amxmouse_device::pb_r()
@@ -275,3 +301,10 @@ uint8_t bbc_tracker_device::pb_r()
 {
 	return (m_buttons->read() & 0x07) | (m_xdir << 3) | (m_ydir << 4) | 0xe0;
 }
+
+} // anonymous namespace
+
+
+DEFINE_DEVICE_TYPE_PRIVATE(BBC_AMXMOUSE,  device_bbc_userport_interface, bbc_amxmouse_device,  "bbc_amxmouse",  "AMX Mouse (BBC Micro)")
+DEFINE_DEVICE_TYPE_PRIVATE(BBC_M512MOUSE, device_bbc_userport_interface, bbc_m512mouse_device, "bbc_m512mouse", "Acorn Master 512 Mouse")
+DEFINE_DEVICE_TYPE_PRIVATE(BBC_TRACKER,   device_bbc_userport_interface, bbc_tracker_device,   "bbc_tracker",   "Marconi RB2 Tracker Ball")

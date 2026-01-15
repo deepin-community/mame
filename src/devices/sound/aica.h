@@ -34,17 +34,18 @@ public:
 
 protected:
 	// device-level overrides
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 	virtual void device_post_load() override;
 	virtual void device_clock_changed() override;
 
 	// sound stream update overrides
-	virtual void sound_stream_update(sound_stream &stream, std::vector<read_stream_view> const &inputs, std::vector<write_stream_view> &outputs) override;
+	virtual void sound_stream_update(sound_stream &stream) override;
 
 	// device_memory_interface configuration
 	virtual space_config_vector memory_space_config() const override;
 
 	address_space_config m_data_config;
+
 private:
 	enum AICA_STATE {AICA_ATTACK,AICA_DECAY1,AICA_DECAY2,AICA_RELEASE};
 
@@ -123,8 +124,9 @@ private:
 	void UpdateRegR(int reg);
 	void w16(u32 addr,u16 val);
 	u16 r16(u32 addr);
-	inline s32 UpdateSlot(AICA_SLOT *slot);
-	void DoMasterSamples(std::vector<read_stream_view> const &inputs, write_stream_view &bufl, write_stream_view &bufr);
+	[[maybe_unused]] void TimersAddTicks(int ticks);
+	s32 UpdateSlot(AICA_SLOT *slot);
+	void DoMasterSamples(sound_stream &stream);
 	void exec_dma();
 
 

@@ -6,17 +6,16 @@ Index: mame/makefile
 ===================================================================
 --- mame.orig/makefile
 +++ mame/makefile
-@@ -214,6 +214,9 @@ ifeq ($(firstword $(filter OpenBSD,$(UNA
- OS := openbsd
+@@ -229,6 +229,8 @@ GENIEOS := bsd
+ else ifeq ($(firstword $(filter GNU/kFreeBSD,$(UNAME))),GNU/kFreeBSD)
+ OS := freebsd
  GENIEOS := freebsd
- endif
-+ifeq ($(firstword $(filter GNU,$(UNAME))),GNU)
++else ifeq ($(firstword $(filter GNU,$(UNAME))),GNU)
 +OS := gnu
-+endif
- ifeq ($(firstword $(filter Darwin,$(UNAME))),Darwin)
- OS := macosx
- GENIEOS := darwin
-@@ -1405,6 +1408,16 @@ linux: generate $(PROJECTDIR)/$(MAKETYPE
+ else ifeq ($(firstword $(filter NetBSD,$(UNAME))),NetBSD)
+ OS := netbsd
+ GENIEOS := freebsd
+@@ -1292,6 +1294,16 @@ linux: generate $(PROJECTDIR)/$(MAKETYPE
  	$(SILENT) $(MAKE) $(MAKEPARAMS) -C $(PROJECTDIR)/$(MAKETYPE)-linux config=$(CONFIG) precompile
  	$(SILENT) $(MAKE) $(MAKEPARAMS) -C $(PROJECTDIR)/$(MAKETYPE)-linux config=$(CONFIG)
  
@@ -33,20 +32,6 @@ Index: mame/makefile
  #-------------------------------------------------
  # gmake-linux-clang
  #-------------------------------------------------
-Index: mame/scripts/src/osd/sdl.lua
-===================================================================
---- mame.orig/scripts/src/osd/sdl.lua
-+++ mame/scripts/src/osd/sdl.lua
-@@ -242,6 +242,9 @@ SDLOS_TARGETOS      = "unix"
- if _OPTIONS["targetos"]=="linux" then
- elseif _OPTIONS["targetos"]=="openbsd" then
- elseif _OPTIONS["targetos"]=="netbsd" then
-+elseif _OPTIONS["targetos"]=="gnu" then
-+    SDL_NETWORK         = "taptun"
-+    SYNC_IMPLEMENTATION = "tc"
- elseif _OPTIONS["targetos"]=="haiku" then
- elseif _OPTIONS["targetos"]=="asmjs" then
- elseif _OPTIONS["targetos"]=="windows" then
 Index: mame/src/osd/sdl/sdlprefix.h
 ===================================================================
 --- mame.orig/src/osd/sdl/sdlprefix.h
@@ -102,29 +87,30 @@ Index: mame/src/osd/modules/file/posixptty.cpp
 +#endif
  
  namespace {
- #if defined(__APPLE__)
+ 
 Index: mame/scripts/genie.lua
 ===================================================================
 --- mame.orig/scripts/genie.lua
 +++ mame/scripts/genie.lua
-@@ -144,6 +144,7 @@ newoption {
- 		{ "freebsd",       "FreeBSD"                },
+@@ -150,6 +150,7 @@ newoption {
  		{ "netbsd",        "NetBSD"                 },
  		{ "openbsd",       "OpenBSD"                },
-+		{ "gnu",           "GNU"                    },
- 		{ "pnacl",         "Native Client - PNaCl"  },
  		{ "linux",         "Linux"                  },
- 		{ "ios",           "iOS"                    },
-Index: mame/src/osd/modules/render/drawbgfx.cpp
++		{ "gnu",           "GNU"                    },
+ 		{ "macosx",        "OSX"                    },
+ 		{ "windows",       "Windows"                },
+ 		{ "haiku",         "Haiku"                  },
+Index: mame/scripts/src/osd/sdl.lua
 ===================================================================
---- mame.orig/src/osd/modules/render/drawbgfx.cpp
-+++ mame/src/osd/modules/render/drawbgfx.cpp
-@@ -170,7 +170,7 @@ static void* sdlNativeWindowHandle(SDL_W
- 		return nullptr;
- 	}
+--- mame.orig/scripts/src/osd/sdl.lua
++++ mame/scripts/src/osd/sdl.lua
+@@ -219,6 +219,9 @@ if _OPTIONS["targetos"]=="windows" then
+ 	SDLOS_TARGETOS      = "win32"
+ elseif _OPTIONS["targetos"]=="macosx" then
+ 	SDLOS_TARGETOS      = "macosx"
++elseif _OPTIONS["targetos"]=="gnu" then
++	SDL_NETWORK         = "taptun"
++	SYNC_IMPLEMENTATION = "tc"
+ end
  
--#   if BX_PLATFORM_LINUX || BX_PLATFORM_BSD || BX_PLATFORM_RPI
-+#   if BX_PLATFORM_LINUX || BX_PLATFORM_BSD || BX_PLATFORM_HURD || BX_PLATFORM_RPI
- 	return (void*)wmi.info.x11.window;
- #   elif BX_PLATFORM_OSX
- 	return wmi.info.cocoa.window;
+ if BASE_TARGETOS=="unix" then

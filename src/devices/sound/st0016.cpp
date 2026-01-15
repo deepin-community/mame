@@ -33,6 +33,7 @@ st0016_device::st0016_device(const machine_config &mconfig, const char *tag, dev
 	, device_memory_interface(mconfig, *this)
 	, m_data_config("data", ENDIANNESS_LITTLE, 8, 21) // shares character RAM area?
 	, m_stream(nullptr)
+	, m_voice{ m_cache, m_cache, m_cache, m_cache, m_cache, m_cache, m_cache, m_cache }
 {
 }
 
@@ -48,10 +49,6 @@ void st0016_device::device_start()
 
 	// allocate stream
 	m_stream = stream_alloc(0, 2, clock() / 128);
-
-	// set host device to each voices
-	for (auto & elem : m_voice)
-		elem.m_host = m_cache;
 
 	save_item(STRUCT_MEMBER(m_voice, m_regs));
 	save_item(STRUCT_MEMBER(m_voice, m_start));
@@ -73,20 +70,17 @@ void st0016_device::device_start()
 //  sound_stream_update - handle a stream update
 //-------------------------------------------------
 
-void st0016_device::sound_stream_update(sound_stream &stream, std::vector<read_stream_view> const &inputs, std::vector<write_stream_view> &outputs)
+void st0016_device::sound_stream_update(sound_stream &stream)
 {
-	outputs[0].fill(0);
-	outputs[1].fill(0);
-
-	for (int sampleind = 0; sampleind < outputs[0].samples(); sampleind++)
+	for (int sampleind = 0; sampleind < stream.samples(); sampleind++)
 	{
 		for (int v = 0; v < 8; v++)
 		{
 			// check if voice is activated
 			if (m_voice[v].update())
 			{
-				outputs[0].add_int(sampleind, (m_voice[v].m_out * m_voice[v].m_vol_l) >> 8, 32768 << 4);
-				outputs[1].add_int(sampleind, (m_voice[v].m_out * m_voice[v].m_vol_r) >> 8, 32768 << 4);
+				stream.add_int(0, sampleind, (m_voice[v].m_out * m_voice[v].m_vol_l) >> 8, 32768 << 4);
+				stream.add_int(1, sampleind, (m_voice[v].m_out * m_voice[v].m_vol_r) >> 8, 32768 << 4);
 			}
 		}
 	}
@@ -158,7 +152,8 @@ u8 st0016_device::snd_r(offs_t offset)
 {
 	if (offset < 0x100)
 	{
-		m_stream->update();
+		if (!machine().side_effects_disabled())
+			m_stream->update();
 		return m_voice[offset >> 5].reg_r(offset & 0x1f);
 	}
 	return 0;

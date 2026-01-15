@@ -133,13 +133,11 @@ Files: src/devices/machine/pdc.*
  src/devices/bus/ti99_peb/*
  src/devices/bus/ti99x/*
  src/devices/bus/apricot/*
- src/devices/bus/vtech/*
  src/devices/video/mos6566.*
  src/devices/video/i82730.*
  src/devices/video/dl1416.*
  src/devices/video/tea1002.*
  src/devices/video/ef9345.*
- src/devices/video/m50458.*
  src/devices/sound/ymdeltat.*
  src/devices/sound/ym2151.*
  src/devices/sound/ym2413.*
@@ -174,7 +172,6 @@ Files: src/devices/machine/pdc.*
  src/lib/formats/rx50_dsk.*
  src/lib/formats/pk8020_dsk.*
  src/lib/formats/vt_cas.*
- src/lib/formats/2d_dsk.*
  src/lib/netlist/*
  src/mame/machine/cx4fn.inc
  src/mame/machine/cx4data.inc
@@ -212,7 +209,6 @@ Files: src/devices/machine/pdc.*
  src/mame/machine/lisa.*
  src/mame/machine/microtan.*
  src/mame/machine/sorcerer.*
- src/mame/audio/meadows.*
  src/mame/audio/lynx.*
  src/mame/audio/gamate.*
  src/mame/audio/channelf.*
@@ -238,14 +234,12 @@ Files: src/devices/machine/pdc.*
  src/mame/drivers/rainbow.*
  src/mame/drivers/dambustr.*
  src/mame/drivers/madalien.*
- src/mame/drivers/meadows.*
  src/mame/drivers/40love.*
  src/mame/drivers/kim1.*
  src/mame/drivers/opwolf.*
  src/mame/drivers/wacky_gator.*
  src/mame/drivers/samcoupe.*
  src/mame/drivers/amstrad.*
- src/mame/drivers/lazercmd.*
  src/mame/drivers/sym1.*
  src/mame/drivers/apricot.*
  src/mame/drivers/shougi.*
@@ -355,14 +349,12 @@ Files: src/devices/machine/pdc.*
  src/mame/includes/rainbow.*
  src/mame/includes/dambustr.*
  src/mame/includes/madalien.*
- src/mame/includes/meadows.*
  src/mame/includes/40love.*
  src/mame/includes/kim1.*
  src/mame/includes/opwolf.*
  src/mame/includes/wacky_gator.*
  src/mame/includes/samcoupe.*
  src/mame/includes/amstrad.*
- src/mame/includes/lazercmd.*
  src/mame/includes/sym1.*
  src/mame/includes/apricot.*
  src/mame/includes/shougi.*
@@ -451,6 +443,8 @@ Files: src/devices/machine/pdc.*
  src/mame/includes/pc1350.*
  src/mame/includes/pc1401.*
  src/mame/includes/pc1403.*
+ src/mame/meadows/lazercmd.cpp
+ src/mame/meadows/meadows.cpp
  src/mame/video/zapcomputer.*
  src/mame/video/tutor.*
  src/mame/video/ace.*
@@ -472,14 +466,12 @@ Files: src/devices/machine/pdc.*
  src/mame/video/rainbow.*
  src/mame/video/dambustr.*
  src/mame/video/madalien.*
- src/mame/video/meadows.*
  src/mame/video/40love.*
  src/mame/video/kim1.*
  src/mame/video/opwolf.*
  src/mame/video/wacky_gator.*
  src/mame/video/samcoupe.*
  src/mame/video/amstrad.*
- src/mame/video/lazercmd.*
  src/mame/video/sym1.*
  src/mame/video/apricot.*
  src/mame/video/shougi.*
@@ -572,7 +564,6 @@ Files: src/devices/machine/pdc.*
  src/mame/audio/svis_snd.*
  src/mame/audio/vc4000snd.*
  src/mame/audio/geebee.*
- src/mame/audio/vc4000snd.*
  src/mame/audio/warpwarp.*
 Copyright: Barry Rodewald
  Brandon Munger
@@ -666,7 +657,6 @@ Files: src/devices/machine/tc009xlvc.*
  src/mame/drivers/rbmk.*
  src/mame/drivers/4enraya.*
  src/mame/drivers/mustache.*
- src/mame/drivers/lazercmd.*
  src/mame/drivers/hng64.*
  src/mame/drivers/geneve.*
  src/mame/drivers/x1twin.*
@@ -753,7 +743,6 @@ Files: src/devices/machine/tc009xlvc.*
  src/mame/includes/rbmk.*
  src/mame/includes/4enraya.*
  src/mame/includes/mustache.*
- src/mame/includes/lazercmd.*
  src/mame/includes/hng64.*
  src/mame/includes/geneve.*
  src/mame/includes/x1twin.*
@@ -840,7 +829,6 @@ Files: src/devices/machine/tc009xlvc.*
  src/mame/video/rbmk.*
  src/mame/video/4enraya.*
  src/mame/video/mustache.*
- src/mame/video/lazercmd.*
  src/mame/video/hng64.*
  src/mame/video/geneve.*
  src/mame/video/x1twin.*
@@ -915,7 +903,7 @@ Copyright:  Andrew Gardner
  Uki
 License: LGPL-2.1+
 
-Files: artwork/* hash/*
+Files: artwork/* hash/* src/mame/layout/*
 Copyright: MAME team
 License: CC0-1.0
  To the extent possible under law, the person who associated CC0 with
@@ -1276,6 +1264,7 @@ License: GPL-2+
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
+ .
  On Debian systems, the full text of the GNU General Public
  License version 2 can be found in the file /usr/share/common-licenses/GPL-2.
 
@@ -1289,6 +1278,7 @@ License: GPL-3+
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
+ .
  On Debian systems, the full text of the GNU General Public
  License version 3 can be found in the file /usr/share/common-licenses/GPL-3.
 
@@ -1304,9 +1294,8 @@ License: LGPL-2.1+
  License for more details.
  .
  You should have received a copy of the GNU Lesser General Public License
- along with this program; see the file COPYING.LIB.  If not, write to
- the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston,
- MA 02110-1301, USA.
+ along with this program; see the file COPYING.LIB.  If not, see
+ <https://www.gnu.org/licenses/>.
  .
  On Debian systems, the full text of the GNU Lesser General Public
  License version 2.1 can be found in the file

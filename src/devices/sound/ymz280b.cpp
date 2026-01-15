@@ -67,21 +67,23 @@ void ymz280b_device::update_irq_state()
 	if (irq_bits && !m_irq_state)
 	{
 		m_irq_state = 1;
-		if (!m_irq_handler.isnull())
+		if (!m_irq_handler.isunset())
 			m_irq_handler(1);
-		else logerror("YMZ280B: IRQ generated, but no callback specified!\n");
+		else
+			logerror("YMZ280B: IRQ generated, but no callback specified!\n");
 	}
 	else if (!irq_bits && m_irq_state)
 	{
 		m_irq_state = 0;
-		if (!m_irq_handler.isnull())
+		if (!m_irq_handler.isunset())
 			m_irq_handler(0);
-		else logerror("YMZ280B: IRQ generated, but no callback specified!\n");
+		else
+			logerror("YMZ280B: IRQ generated, but no callback specified!\n");
 	}
 }
 
 
-void ymz280b_device::update_step(struct YMZ280BVoice *voice)
+void ymz280b_device::update_step(YMZ280BVoice *voice)
 {
 	int frequency;
 
@@ -94,7 +96,7 @@ void ymz280b_device::update_step(struct YMZ280BVoice *voice)
 }
 
 
-void ymz280b_device::update_volumes(struct YMZ280BVoice *voice)
+void ymz280b_device::update_volumes(YMZ280BVoice *voice)
 {
 	if (voice->pan == 8)
 	{
@@ -118,24 +120,24 @@ void ymz280b_device::update_volumes(struct YMZ280BVoice *voice)
 
 void ymz280b_device::device_post_load()
 {
-	for (auto & elem : m_voice)
+	for (size_t i = 0; i < std::size(m_voice); i++)
 	{
-		struct YMZ280BVoice *voice = &elem;
+		YMZ280BVoice *voice = &m_voice[i];
 		update_step(voice);
 		if(voice->irq_schedule)
-			voice->timer->adjust(attotime::zero);
+			voice->timer->adjust(attotime::zero, i);
 	}
 }
 
 
-void ymz280b_device::update_irq_state_timer_common(int voicenum)
+TIMER_CALLBACK_MEMBER(ymz280b_device::update_irq_state_timer_common)
 {
-	struct YMZ280BVoice *voice = &m_voice[voicenum];
+	YMZ280BVoice *voice = &m_voice[param];
 
 	if(!voice->irq_schedule) return;
 
 	voice->playing = 0;
-	m_status_register |= 1 << voicenum;
+	m_status_register |= 1 << param;
 	update_irq_state();
 	voice->irq_schedule = 0;
 }
@@ -164,7 +166,7 @@ static void compute_tables()
 
 ***********************************************************************************************/
 
-int ymz280b_device::generate_adpcm(struct YMZ280BVoice *voice, s16 *buffer, int samples)
+int ymz280b_device::generate_adpcm(YMZ280BVoice *voice, s16 *buffer, int samples)
 {
 	int position = voice->position;
 	int signal = voice->signal;
@@ -276,7 +278,7 @@ int ymz280b_device::generate_adpcm(struct YMZ280BVoice *voice, s16 *buffer, int 
 
 ***********************************************************************************************/
 
-int ymz280b_device::generate_pcm8(struct YMZ280BVoice *voice, s16 *buffer, int samples)
+int ymz280b_device::generate_pcm8(YMZ280BVoice *voice, s16 *buffer, int samples)
 {
 	int position = voice->position;
 	int val;
@@ -346,7 +348,7 @@ int ymz280b_device::generate_pcm8(struct YMZ280BVoice *voice, s16 *buffer, int s
 
 ***********************************************************************************************/
 
-int ymz280b_device::generate_pcm16(struct YMZ280BVoice *voice, s16 *buffer, int samples)
+int ymz280b_device::generate_pcm16(YMZ280BVoice *voice, s16 *buffer, int samples)
 {
 	int position = voice->position;
 	int val;
@@ -415,27 +417,21 @@ int ymz280b_device::generate_pcm16(struct YMZ280BVoice *voice, s16 *buffer, int 
 //  sound_stream_update - handle a stream update
 //-------------------------------------------------
 
-void ymz280b_device::sound_stream_update(sound_stream &stream, std::vector<read_stream_view> const &inputs, std::vector<write_stream_view> &outputs)
+void ymz280b_device::sound_stream_update(sound_stream &stream)
 {
-	auto &lacc = outputs[0];
-	auto &racc = outputs[1];
 	int v;
-
-	/* clear out the accumulator */
-	lacc.fill(0);
-	racc.fill(0);
 
 	/* loop over voices */
 	for (v = 0; v < 8; v++)
 	{
-		struct YMZ280BVoice *voice = &m_voice[v];
+		YMZ280BVoice *voice = &m_voice[v];
 		s16 prev = voice->last_sample;
 		s16 curr = voice->curr_sample;
 		s16 *curr_data = m_scratch.get();
 		s32 sampindex = 0;
 		u32 new_samples, samples_left;
 		u32 final_pos;
-		int remaining = lacc.samples();
+		int remaining = stream.samples();
 		int lvol = voice->output_left;
 		int rvol = voice->output_right;
 
@@ -452,8 +448,8 @@ void ymz280b_device::sound_stream_update(sound_stream &stream, std::vector<read_
 		while (remaining > 0 && voice->output_pos < FRAC_ONE)
 		{
 			int interp_sample = ((s32(prev) * (FRAC_ONE - voice->output_pos)) + (s32(curr) * voice->output_pos)) >> FRAC_BITS;
-			lacc.add_int(sampindex, interp_sample * lvol / 2, 32768 * 256);
-			racc.add_int(sampindex, interp_sample * rvol / 2, 32768 * 256);
+			stream.add_int(0, sampindex, interp_sample * lvol / 2, 32768 * 256);
+			stream.add_int(1, sampindex, interp_sample * rvol / 2, 32768 * 256);
 			sampindex++;
 			voice->output_pos += voice->output_step;
 			remaining--;
@@ -501,7 +497,7 @@ void ymz280b_device::sound_stream_update(sound_stream &stream, std::vector<read_
 				voice->playing = 0;
 
 				/* set update_irq_state_timer. IRQ is signaled on next CPU execution. */
-				voice->timer->adjust(attotime::zero);
+				voice->timer->adjust(attotime::zero, v);
 				voice->irq_schedule = 1;
 			}
 		}
@@ -517,8 +513,8 @@ void ymz280b_device::sound_stream_update(sound_stream &stream, std::vector<read_
 			while (remaining > 0 && voice->output_pos < FRAC_ONE)
 			{
 				int interp_sample = ((s32(prev) * (FRAC_ONE - voice->output_pos)) + (s32(curr) * voice->output_pos)) >> FRAC_BITS;
-				lacc.add_int(sampindex, interp_sample * lvol / 2, 32768 * 256);
-				racc.add_int(sampindex, interp_sample * rvol / 2, 32768 * 256);
+				stream.add_int(0, sampindex, interp_sample * lvol / 2, 32768 * 256);
+				stream.add_int(1, sampindex, interp_sample * rvol / 2, 32768 * 256);
 				sampindex++;
 				voice->output_pos += voice->output_step;
 				remaining--;
@@ -552,11 +548,10 @@ void ymz280b_device::device_start()
 
 	/* initialize the rest of the structure */
 	m_master_clock = (double)clock() / 384.0;
-	m_irq_handler.resolve();
 
 	for (int i = 0; i < 8; i++)
 	{
-		m_voice[i].timer = timer_alloc(i);
+		m_voice[i].timer = timer_alloc(FUNC(ymz280b_device::update_irq_state_timer_common), this);
 	}
 
 	/* create the stream */
@@ -629,22 +624,13 @@ void ymz280b_device::device_reset()
 	/* clear other voice parameters */
 	for (auto &elem : m_voice)
 	{
-		struct YMZ280BVoice *voice = &elem;
+		YMZ280BVoice *voice = &elem;
 
 		voice->curr_sample = 0;
 		voice->last_sample = 0;
 		voice->output_pos = FRAC_ONE;
 		voice->playing = 0;
 	}
-}
-
-
-void ymz280b_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
-{
-	if (id < 8)
-		update_irq_state_timer_common( id );
-	else
-		throw emu_fatalerror("Unknown id in ymz280b_device::device_timer");
 }
 
 
@@ -655,7 +641,7 @@ void ymz280b_device::device_clock_changed()
 }
 
 
-void ymz280b_device::rom_bank_updated()
+void ymz280b_device::rom_bank_pre_change()
 {
 	m_stream->update();
 }
@@ -669,13 +655,10 @@ void ymz280b_device::rom_bank_updated()
 
 void ymz280b_device::write_to_register(int data)
 {
-	struct YMZ280BVoice *voice;
-	int i;
-
 	/* lower registers follow a pattern */
 	if (m_current_register < 0x80)
 	{
-		voice = &m_voice[(m_current_register >> 2) & 7];
+		YMZ280BVoice *voice = &m_voice[(m_current_register >> 2) & 7];
 
 		switch (m_current_register & 0xe3)
 		{
@@ -687,8 +670,10 @@ void ymz280b_device::write_to_register(int data)
 			case 0x01:      /* pitch upper 1 bit, loop, key on, mode */
 				voice->fnum = (voice->fnum & 0xff) | ((data & 0x01) << 8);
 				voice->looping = (data & 0x10) >> 4;
-				if ((data & 0x60) == 0) data &= 0x7f; /* ignore mode setting and set to same state as KON=0 */
-				else voice->mode = (data & 0x60) >> 5;
+				if ((data & 0x60) == 0)
+					data &= 0x7f; /* ignore mode setting and set to same state as KON=0 */
+				else
+					voice->mode = (data & 0x60) >> 5;
 				if (!voice->keyon && (data & 0x80) && m_keyon_enable)
 				{
 					voice->playing = 1;
@@ -822,7 +807,7 @@ void ymz280b_device::write_to_register(int data)
 
 				if (m_keyon_enable && !(data & 0x80))
 				{
-					for (i = 0; i < 8; i++)
+					for (int i = 0; i < 8; i++)
 					{
 						m_voice[i].playing = 0;
 
@@ -832,7 +817,7 @@ void ymz280b_device::write_to_register(int data)
 				}
 				else if (!m_keyon_enable && (data & 0x80))
 				{
-					for (i = 0; i < 8; i++)
+					for (int i = 0; i < 8; i++)
 					{
 						if (m_voice[i].keyon && m_voice[i].looping)
 							m_voice[i].playing = 1;

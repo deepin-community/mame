@@ -15,7 +15,7 @@
 //  DEVICE DEFINITIONS
 //**************************************************************************
 
-DEFINE_DEVICE_TYPE(SPECTRUM_USPEECH, spectrum_uspeech_device, "spectrum_uspeech", "Spectrum Currah \xC2\xB5Speech")
+DEFINE_DEVICE_TYPE(SPECTRUM_USPEECH, spectrum_uspeech_device, "spectrum_uspeech", u8"Spectrum Currah µSpeech")
 
 
 //-------------------------------------------------
@@ -94,7 +94,7 @@ void spectrum_uspeech_device::device_reset()
 //  IMPLEMENTATION
 //**************************************************************************
 
-READ_LINE_MEMBER(spectrum_uspeech_device::romcs)
+bool spectrum_uspeech_device::romcs()
 {
 	return m_romcs;
 }
@@ -114,7 +114,7 @@ uint8_t spectrum_uspeech_device::iorq_r(offs_t offset)
 		m_romcs = !m_romcs;
 	}
 
-	return 0xff;
+	return offset & 1 ? m_slot->fb_r() : 0xff;
 }
 
 uint8_t spectrum_uspeech_device::mreq_r(offs_t offset)

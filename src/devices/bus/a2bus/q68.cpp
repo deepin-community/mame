@@ -30,7 +30,7 @@
     68008 0x12000-0x1ffff -> Onboard RAM, ~1MB
 
     Todo:
-    Implement Watchdog timer. Only relevant to Q-68 and bus errors for non existant memory access
+    Implement Watchdog timer. Only relevant to Q-68 and bus errors for nonexistent memory access
     Speed of 6502 should be slower when 68008 is enabled and accessing AppleII memory space
     Speed of 68008 should be slower when access the Apple II memory space
 
@@ -41,7 +41,7 @@
 #include "emu.h"
 #include "q68.h"
 
-#include "cpu/m68000/m68000.h"
+#include "cpu/m68000/m68008.h"
 
 
 /***************************************************************************
@@ -135,6 +135,11 @@ void a2bus_68k_device::device_start()
 }
 
 void a2bus_68k_device::device_reset()
+{
+	reset_from_bus();
+}
+
+void a2bus_68k_device::reset_from_bus()
 {
 	m_m68008->set_input_line(INPUT_LINE_RESET, ASSERT_LINE);
 	m_m68008->set_input_line(INPUT_LINE_HALT, ASSERT_LINE);

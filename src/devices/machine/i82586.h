@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "dinetwork.h"
+
 class i82586_base_device :
 	public device_t,
 	public device_memory_interface,
@@ -157,17 +159,16 @@ public:
 	// callback configuration
 	auto out_irq_cb() { return m_out_irq.bind(); }
 
-	DECLARE_WRITE_LINE_MEMBER(ca);
-	DECLARE_WRITE_LINE_MEMBER(reset_w);
+	void ca(int state);
+	void reset_w(int state);
 
 protected:
 	i82586_base_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock, endianness_t endian, u8 datawidth, u8 addrwidth);
 
 	// standard device_* overrides
-	virtual void device_start() override;
-	virtual void device_reset() override;
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
 
-	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr) override;
 	virtual space_config_vector memory_space_config() const override;
 
 	// device_network_interface overrides
@@ -181,7 +182,7 @@ protected:
 	virtual void update_scb();
 
 	// command unit
-	virtual void cu_execute();
+	virtual TIMER_CALLBACK_MEMBER(cu_execute);
 	virtual void cu_complete(const u16 status);
 	virtual bool cu_iasetup() = 0;
 	virtual bool cu_configure() = 0;
@@ -204,14 +205,12 @@ protected:
 	static u64 address_hash(u8 *buf, int length);
 	int fetch_bytes(u8 *buf, u32 src, int length);
 	int store_bytes(u32 dst, u8 *buf, int length);
-	void dump_bytes(u8 *buf, int length);
 
 	// device_* members
 	const address_space_config m_space_config;
 	address_space *m_space;
 
 	devcb_write_line m_out_irq;
-	static const device_timer_id CU_TIMER = 0;
 	emu_timer *m_cu_timer;
 
 	// interrupt state
@@ -221,6 +220,7 @@ protected:
 	bool m_rnr;         // receive unit became not ready
 	bool m_initialised;
 	bool m_reset;
+	bool m_irq;
 	int m_irq_assert;   // configurable interrupt polarity
 
 	// receive/command unit state
@@ -267,8 +267,8 @@ public:
 
 protected:
 	// standard device_* overrides
-	virtual void device_start() override;
-	virtual void device_reset() override;
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
 
 	// setup and scb
 	virtual void initialise() override;
@@ -326,8 +326,8 @@ protected:
 	i82596_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock, endianness_t endian, u8 datawidth);
 
 	// standard device_* overrides
-	virtual void device_start() override;
-	virtual void device_reset() override;
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
 
 	// setup and scb
 	virtual void initialise() override;

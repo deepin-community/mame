@@ -50,7 +50,7 @@ void device_bbc_rom_interface::rom_alloc(uint32_t size, const char *tag)
 {
 	if (m_rom == nullptr)
 	{
-		m_rom = device().machine().memory().region_alloc(std::string(tag).append(BBC_ROM_REGION_TAG).c_str(), size, 1, ENDIANNESS_LITTLE)->base();
+		m_rom = device().machine().memory().region_alloc(std::string(tag).append(BBC_ROM_REGION_TAG), size, 1, ENDIANNESS_LITTLE)->base();
 		m_rom_size = size;
 	}
 }
@@ -84,7 +84,7 @@ void device_bbc_rom_interface::nvram_alloc(uint32_t size)
 //-------------------------------------------------
 bbc_romslot_device::bbc_romslot_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock)
 	: device_t(mconfig, type, tag, owner, clock)
-	, device_image_interface(mconfig, *this)
+	, device_rom_image_interface(mconfig, *this)
 	, device_single_card_slot_interface<device_bbc_rom_interface>(mconfig, *this)
 	, m_cart(nullptr)
 {
@@ -114,35 +114,36 @@ void bbc_romslot_device::device_start()
 //  call load
 //-------------------------------------------------
 
-image_init_result bbc_romslot_device::call_load()
+std::pair<std::error_condition, std::string> bbc_romslot_device::call_load()
 {
 	if (m_cart)
 	{
-		uint32_t size = !loaded_through_softlist() ? length() : get_software_region_length("rom");
+		uint32_t const size = !loaded_through_softlist() ? length() : get_software_region_length("rom");
 
 		if (size % 0x2000)
+			return std::make_pair(image_error::INVALIDLENGTH, "Invalid ROM size (must be a multiple of 8K)");
+
+		uint8_t *base;
+		const char *pcb_name = get_feature("slot");
+		if (pcb_name && !strcmp(pcb_name, "ram"))
 		{
-			seterror(image_error::INVALIDIMAGE, "Invalid ROM size");
-			return image_init_result::FAIL;
+			base = m_cart->get_ram_base();
+		}
+		else
+		{
+			m_cart->rom_alloc(size, tag());
+			base = m_cart->get_rom_base();
 		}
 
-		m_cart->rom_alloc(size, tag());
-
 		if (!loaded_through_softlist())
-			fread(m_cart->get_rom_base(), size);
+			fread(base, size);
 		else
-			memcpy(m_cart->get_rom_base(), get_software_region("rom"), size);
+			memcpy(base, get_software_region("rom"), size);
 
 		m_cart->decrypt_rom();
-
-		if (get_software_region("ram"))
-			m_cart->ram_alloc(get_software_region_length("ram"));
-
-		if (get_software_region("nvram"))
-			m_cart->nvram_alloc(get_software_region_length("nvram"));
 	}
 
-	return image_init_result::PASS;
+	return std::make_pair(std::error_condition(), std::string());
 }
 
 //-------------------------------------------------
@@ -213,15 +214,29 @@ void bbc_romslot_device::write(offs_t offset, uint8_t data)
 #include "datagem.h"
 #include "dfs.h"
 #include "genie.h"
+//#include "gommc.h"
 #include "pal.h"
 //#include "ramagic.h"
 #include "rtc.h"
 
 
+//-------------------------------------------------
+//  present - rom/ram selected
+//-------------------------------------------------
+
+bool bbc_romslot_device::present()
+{
+	if (m_cart && ((m_cart->device().type() == BBC_RAM) || m_cart->device().type() == BBC_NVRAM))
+		return true;
+	else
+		return is_loaded() || loaded_through_softlist();
+}
+
+
 void bbc_rom_devices(device_slot_interface &device)
 {
+	device.option_add("ram", BBC_RAM);
 	device.option_add_internal("rom", BBC_ROM);
-	device.option_add_internal("ram", BBC_RAM);
 	device.option_add_internal("nvram", BBC_NVRAM);
 	device.option_add_internal("cciword", BBC_CCIWORD);
 	device.option_add_internal("ccibase", BBC_CCIBASE);
@@ -234,8 +249,10 @@ void bbc_rom_devices(device_slot_interface &device)
 	device.option_add_internal("palmo2", BBC_PALMO2);
 	device.option_add_internal("datagem", BBC_DATAGEM);
 	device.option_add_internal("genie", BBC_PMSGENIE);
+	//device.option_add_internal("gommc", BBC_GOMMC);
 	device.option_add_internal("dfse00", BBC_DFSE00);
 	//device.option_add_internal("ramagic", BBC_RAMAGIC);
 	device.option_add_internal("stlrtc",  BBC_STLRTC);
 	device.option_add_internal("pmsrtc", BBC_PMSRTC);
+	device.option_add_internal("trilogy", BBC_TRILOGY);
 }

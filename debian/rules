@@ -23,9 +23,6 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 endif
 
-# Use the less-greedy-for-memory Gold linker whenever available
-LINK_WITH_GOLD = 1
-
 # g++ 10 seems buggy on some archs, use to build with g++ 9 as a workaround
 # if enabled, remember to add dependency on g++-9 in debian/control as well!
 COMPILE_WITH_GCC9 =
@@ -41,12 +38,11 @@ DEB_OPTS = \
     BIGENDIAN= \
     PYTHON_EXECUTABLE=python3 \
     QT_HOME=/usr/lib/$(DEB_HOST_MULTIARCH)/qt5/ \
-    USE_SYSTEM_LIB_ASIO= \
+    USE_SYSTEM_LIB_ASIO=1 \
     USE_SYSTEM_LIB_EXPAT=1 \
     USE_SYSTEM_LIB_ZLIB=1 \
     USE_SYSTEM_LIB_JPEG=1 \
     USE_SYSTEM_LIB_FLAC=1 \
-    USE_SYSTEM_LIB_LUA=lua5.3:/usr/include/lua5.3 \
     USE_SYSTEM_LIB_SQLITE3=1 \
     USE_SYSTEM_LIB_PORTMIDI=1 \
     USE_SYSTEM_LIB_PORTAUDIO=1 \
@@ -57,6 +53,13 @@ DEB_OPTS = \
     USE_SYSTEM_LIB_PUGIXML=1 \
     VERBOSE=1
 
+# verbatim from Mame 0.253 release notes:
+# MAME now requires Lua compiled as C++ to work correctly.
+# This prevents the use of Lua libraries from Linux distribution
+# package repositories, as they are compiled as C.
+#DEB_OPTS += \
+#    USE_SYSTEM_LIB_LUA=lua5.3:/usr/include/lua5.3
+
 # Make build less verbose if requested
 ifneq (,$(filter terse,$(DEB_BUILD_OPTIONS)))
 DEB_OPTS += \
@@ -66,9 +69,7 @@ endif
 # Set specific arch options
 ifeq ($(DEB_HOST_ARCH),alpha)
 DEB_OPTS += \
-    FORCE_DRC_C_BACKEND=1 \
     PTR64=1
-LINK_WITH_GOLD =
 endif
 
 ifeq ($(DEB_HOST_ARCH),amd64)
@@ -79,8 +80,15 @@ endif
 ifeq ($(DEB_HOST_ARCH),arm64)
 DEB_OPTS += \
     ARCHOPTS="-mabi=lp64 -fPIC"
+LINK_WITH_GOLD = 1
+ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
 # reduce jobs to release memory on Launchpad builder VM
 NUMJOBS = 2
+endif
+endif
+
+ifeq ($(DEB_HOST_ARCH),armel)
+export DEB_LDFLAGS_MAINT_APPEND += -Wl,--long-plt
 endif
 
 ifeq ($(DEB_HOST_ARCH),armhf)
@@ -88,20 +96,24 @@ export DEB_LDFLAGS_MAINT_APPEND += -Wl,--allow-multiple-definition
 endif
 
 ifeq ($(DEB_HOST_ARCH),hppa)
-LINK_WITH_GOLD =
 DEB_OPTS += \
+    BIGENDIAN=1 \
     NOASM=1
 endif
 
 ifeq ($(DEB_HOST_ARCH),ia64)
 DEB_OPTS += \
-    FORCE_DRC_C_BACKEND=1 \
     PTR64=1
-LINK_WITH_GOLD =
+endif
+
+ifeq ($(DEB_HOST_ARCH),loong64)
+DEB_OPTS += \
+    PTR64=1
+export DEB_CFLAGS_MAINT_APPEND += -mcmodel=medium
+export DEB_CXXFLAGS_MAINT_APPEND += -mcmodel=medium
 endif
 
 ifeq ($(DEB_HOST_ARCH),m68k)
-LINK_WITH_GOLD =
 DEB_OPTS += \
     NOASM=1
 endif
@@ -110,14 +122,12 @@ ifeq ($(DEB_HOST_ARCH),mips)
 DEB_OPTS += \
     ARCHOPTS=-Umips \
     BIGENDIAN=1
-LINK_WITH_GOLD =
 endif
 
 ifeq ($(DEB_HOST_ARCH),mipsel)
 DEB_OPTS += \
     ARCHOPTS=-Umips \
     NOASM=1
-LINK_WITH_GOLD =
 endif
 
 ifeq ($(DEB_HOST_ARCH),mips64el)
@@ -130,36 +140,32 @@ ifeq ($(DEB_HOST_ARCH),powerpc)
 DEB_OPTS += \
     ARCHOPTS=-Upowerpc \
     BIGENDIAN=1
-LINK_WITH_GOLD =
 endif
 
 ifeq ($(DEB_HOST_ARCH),ppc64)
 DEB_OPTS += \
     PTR64=1 \
     BIGENDIAN=1
-LINK_WITH_GOLD =
 endif
 
 ifeq ($(DEB_HOST_ARCH),ppc64el)
 DEB_OPTS += \
     PTR64=1
-LINK_WITH_GOLD =
+ifeq (yes,$(shell dpkg-vendor --derives-from Ubuntu && echo yes))
 # reduce jobs to release memory on Launchpad builder VM
 NUMJOBS = 2
+endif
 endif
 
 ifeq ($(DEB_HOST_ARCH),riscv64)
 DEB_OPTS += \
-    FORCE_DRC_C_BACKEND=1 \
     OPTIMIZE=1 \
     PTR64=1
-LINK_WITH_GOLD =
 endif
 
 ifeq ($(DEB_HOST_ARCH),s390)
 DEB_OPTS += \
     BIGENDIAN=1
-LINK_WITH_GOLD =
 endif
 
 ifeq ($(DEB_HOST_ARCH),s390x)
@@ -169,7 +175,6 @@ DEB_OPTS += \
 endif
 
 ifeq ($(DEB_HOST_ARCH),sh4)
-LINK_WITH_GOLD =
 DEB_OPTS += \
     NOASM=1
 endif
@@ -177,7 +182,6 @@ endif
 ifeq ($(DEB_HOST_ARCH),sparc)
 DEB_OPTS += \
     BIGENDIAN=1
-LINK_WITH_GOLD =
 endif
 
 ifeq ($(DEB_HOST_ARCH),sparc64)
@@ -185,23 +189,6 @@ DEB_OPTS += \
     PTR64=1 \
     BIGENDIAN=1 \
     NOASM=1
-LINK_WITH_GOLD =
-endif
-
-# kFreeBSD architectures
-ifeq ($(DEB_HOST_ARCH),kfreebsd-amd64)
-DEB_OPTS += \
-    TARGETOS=freebsd \
-    PTR64=1 \
-    USE_SYSTEM_LIB_PORTMIDI=
-export DEB_LDFLAGS_MAINT_APPEND = -ldl
-endif
-
-ifeq ($(DEB_HOST_ARCH),kfreebsd-i386)
-DEB_OPTS += \
-    TARGETOS=freebsd \
-    USE_SYSTEM_LIB_PORTMIDI=
-export DEB_LDFLAGS_MAINT_APPEND = -ldl
 endif
 
 # GNU/Hurd architecture
@@ -210,14 +197,13 @@ DEB_OPTS += \
     TARGETOS=gnu \
     USE_SYSTEM_LIB_PORTMIDI= \
     NO_USE_MIDI=1
-LINK_WITH_GOLD =
 endif
 
 DEB_MAME_OPTS = \
-    SDL_INI_PATH=/etc/mame \
     FULLNAME=mame \
     TARGET=mame \
     SUBTARGET=mame \
+    SDL_INI_PATH=/etc/mame \
     TOOLS=1
 
 ifdef COMPILE_WITH_GCC9
@@ -225,6 +211,9 @@ DEB_OPTS += \
 	CC=gcc-9 \
 	LD=g++-9 \
 	CXX=g++-9
+else
+# gcc-10 complains about implicit declarations, tell it we don't care
+CFLAGS := $(patsubst -Werror=implicit-function-declaration,-Wno-error=implicit-function-declaration,$(CFLAGS))
 endif
 
 ifdef LINK_WITH_GOLD
@@ -250,7 +239,7 @@ CFLAGS := $(CFLAGS:-g=-g0)
 endif
 
 %:
-	dh $@
+	dh $@ --with sphinxdoc
 
 override_dh_auto_build-arch:
 	$(MAKE) $(DEB_OPTS) $(DEB_MAME_OPTS)
@@ -261,10 +250,21 @@ override_dh_auto_build-arch:
 	mv ui.ini default.ui.ini
 
 override_dh_auto_build-indep:
-	$(MAKE) -C docs singlehtml
+	# Replace bundled sphinx rtd theme with a symlink to the packaged one
+	# The included one is old and does not play well with dh_sphinxdoc.
+	test -d docs/themes/sphinx_rtd_theme && \
+		mv docs/themes/sphinx_rtd_theme docs/themes/sphinx_rtd_theme.vendor && \
+		ln -s /usr/share/sphinx_rtd_theme $(CURDIR)/docs/themes
+	$(MAKE) -C docs html
+	find language -mindepth 1 -type d -execdir msgfmt {}/strings.po -o {}/strings.mo \;
 
 override_dh_auto_clean:
 	PYTHON_EXECUTABLE=python3 dh_auto_clean
+	# Restore vendored sphinx rtd theme
+	-test -L docs/themes/sphinx_rtd_theme && \
+		rm docs/themes/sphinx_rtd_theme && \
+		mv docs/themes/sphinx_rtd_theme.vendor docs/themes/sphinx_rtd_theme
+	find language -name "*.mo" -delete
 
 override_dh_auto_test-arch:
 	# Run MAME's internal validation tests
