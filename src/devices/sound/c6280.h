@@ -17,8 +17,8 @@ public:
 
 protected:
 	// device-level overrides
-	virtual void device_start() override;
-	virtual void device_reset() override;
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
 	virtual void device_clock_changed() override;
 
 	// sound stream update overrides
@@ -42,6 +42,7 @@ private:
 	// internal state
 	sound_stream *m_stream;
 	u8 m_select;
+	u8 m_enabled;
 	u8 m_balance;
 	u8 m_lfo_frequency;
 	u8 m_lfo_control;

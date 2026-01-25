@@ -166,6 +166,7 @@ scsp_device::scsp_device(const machine_config &mconfig, const char *tag, device_
 {
 	std::fill(std::begin(m_RINGBUF), std::end(m_RINGBUF), 0);
 	std::fill(std::begin(m_MidiStack), std::end(m_MidiStack), 0);
+	std::fill(std::begin(m_MidiOutStack), std::end(m_MidiOutStack), 0);
 	std::fill(std::begin(m_LPANTABLE), std::end(m_LPANTABLE), 0);
 	std::fill(std::begin(m_RPANTABLE), std::end(m_RPANTABLE), 0);
 	std::fill(std::begin(m_TimPris), std::end(m_TimPris), 0);
@@ -198,10 +199,6 @@ void scsp_device::device_start()
 {
 	// init the emulation
 	init();
-
-	// set up the IRQ callbacks
-	m_irq_cb.resolve_safe();
-	m_main_irq_cb.resolve_safe();
 
 	// Stereo output with EXTS0,1 Input (External digital audio output)
 	m_stream = stream_alloc(2, 2, clock() / 512);
@@ -247,6 +244,7 @@ void scsp_device::device_start()
 	save_item(NAME(m_IrqTimBC));
 	save_item(NAME(m_IrqMidi));
 
+	save_item(NAME(m_MidiOutStack));
 	save_item(NAME(m_MidiOutW));
 	save_item(NAME(m_MidiOutR));
 	save_item(NAME(m_MidiStack));
@@ -303,7 +301,7 @@ void scsp_device::device_clock_changed()
 	m_stream->set_sample_rate(clock() / 512);
 }
 
-void scsp_device::rom_bank_updated()
+void scsp_device::rom_bank_pre_change()
 {
 	m_stream->update();
 }
@@ -363,7 +361,6 @@ void scsp_device::CheckPendingIRQ()
 		if (en & 8)
 		{
 			m_irq_cb(m_IrqMidi, ASSERT_LINE);
-			m_udata.data[0x20/2] &= ~8;
 			return;
 		}
 
@@ -579,9 +576,9 @@ void scsp_device::init()
 	m_MidiOutR = m_MidiOutW = 0;
 
 	m_DSP.space = &this->space();
-	m_timerA = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(scsp_device::timerA_cb), this));
-	m_timerB = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(scsp_device::timerB_cb), this));
-	m_timerC = machine().scheduler().timer_alloc(timer_expired_delegate(FUNC(scsp_device::timerC_cb), this));
+	m_timerA = timer_alloc(FUNC(scsp_device::timerA_cb), this);
+	m_timerB = timer_alloc(FUNC(scsp_device::timerB_cb), this);
+	m_timerC = timer_alloc(FUNC(scsp_device::timerC_cb), this);
 
 	for (i = 0; i < 0x400; ++i)
 	{
@@ -737,7 +734,7 @@ void scsp_device::UpdateReg(int reg)
 			break;
 		case 0x6:
 		case 0x7:
-			midi_in(m_udata.data[0x6/2] & 0xff);
+			midi_out_w(m_udata.data[0x6/2] & 0xff);
 			break;
 		case 8:
 		case 9:
@@ -763,7 +760,7 @@ void scsp_device::UpdateReg(int reg)
 			break;
 		case 0x18:
 		case 0x19:
-			if (!m_irq_cb.isnull())
+			if (!m_irq_cb.isunset())
 			{
 				m_TimPris[0] = 1 << ((m_udata.data[0x18/2] >> 8) & 0x7);
 				m_TimCnt[0] = (m_udata.data[0x18/2] & 0xff) << 8;
@@ -780,7 +777,7 @@ void scsp_device::UpdateReg(int reg)
 			break;
 		case 0x1a:
 		case 0x1b:
-			if (!m_irq_cb.isnull())
+			if (!m_irq_cb.isunset())
 			{
 				m_TimPris[1] = 1 << ((m_udata.data[0x1A/2] >> 8) & 0x7);
 				m_TimCnt[1] = (m_udata.data[0x1A/2] & 0xff) << 8;
@@ -797,7 +794,7 @@ void scsp_device::UpdateReg(int reg)
 			break;
 		case 0x1C:
 		case 0x1D:
-			if (!m_irq_cb.isnull())
+			if (!m_irq_cb.isunset())
 			{
 				m_TimPris[2] = 1 << ((m_udata.data[0x1C/2] >> 8) & 0x7);
 				m_TimCnt[2] = (m_udata.data[0x1C/2] & 0xff) << 8;
@@ -814,7 +811,7 @@ void scsp_device::UpdateReg(int reg)
 			break;
 		case 0x1e: // SCIEB
 		case 0x1f:
-			if (!m_irq_cb.isnull())
+			if (!m_irq_cb.isunset())
 			{
 				CheckPendingIRQ();
 
@@ -824,7 +821,7 @@ void scsp_device::UpdateReg(int reg)
 			break;
 		case 0x20: // SCIPD
 		case 0x21:
-			if (!m_irq_cb.isnull())
+			if (!m_irq_cb.isunset())
 			{
 				if (m_udata.data[0x1e/2] & m_udata.data[0x20/2] & 0x20)
 					popmessage("SCSP SCIPD write %04x, contact MAMEdev",m_udata.data[0x20/2]);
@@ -833,7 +830,7 @@ void scsp_device::UpdateReg(int reg)
 		case 0x22:  //SCIRE
 		case 0x23:
 
-			if (!m_irq_cb.isnull())
+			if (!m_irq_cb.isunset())
 			{
 				m_udata.data[0x20/2] &= ~m_udata.data[0x22/2];
 				ResetInterrupts();
@@ -860,7 +857,7 @@ void scsp_device::UpdateReg(int reg)
 		case 0x27:
 		case 0x28:
 		case 0x29:
-			if (!m_irq_cb.isnull())
+			if (!m_irq_cb.isunset())
 			{
 				m_IrqTimA = DecodeSCI(SCITMA);
 				m_IrqTimBC = DecodeSCI(SCITMB);
@@ -903,12 +900,16 @@ void scsp_device::UpdateRegR(int reg)
 				u16 v = m_udata.data[0x4/2];
 				v &= 0xff00;
 				v |= m_MidiStack[m_MidiR];
-				m_irq_cb(m_IrqMidi, CLEAR_LINE);   // cancel the IRQ
 				logerror("Read %x from SCSP MIDI\n", v);
 				if (m_MidiR != m_MidiW)
 				{
 					++m_MidiR;
 					m_MidiR &= 31;
+				}
+				if (m_MidiR == m_MidiW)     // if the input FIFO is empty, clear the IRQ
+				{
+					m_irq_cb(m_IrqMidi, CLEAR_LINE);
+					m_udata.data[0x20 / 2] &= ~8;
 				}
 				m_udata.data[0x4/2] = v;
 			}
@@ -1427,14 +1428,6 @@ void scsp_device::exec_dma()
 	}
 }
 
-#ifdef UNUSED_FUNCTION
-int IRQCB(void *param)
-{
-	CheckPendingIRQ(param);
-	return -1;
-}
-#endif
-
 
 u16 scsp_device::read(offs_t offset)
 {
@@ -1463,9 +1456,17 @@ void scsp_device::midi_in(u8 data)
 
 u16 scsp_device::midi_out_r()
 {
-	u8 val = m_MidiStack[m_MidiR++];
-	m_MidiR &= 31;
+	u8 val = m_MidiOutStack[m_MidiOutR++];
+	m_MidiOutR &= 31;
 	return val;
+}
+
+void scsp_device::midi_out_w(u8 data)
+{
+	m_MidiOutStack[m_MidiOutW++] = data;
+	m_MidiOutW &= 31;
+
+	//CheckPendingIRQ();
 }
 
 //LFO handling

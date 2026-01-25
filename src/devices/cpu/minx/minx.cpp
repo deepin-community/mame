@@ -41,14 +41,13 @@ TODO:
 - Add support for O and C flags in NEG8 instruction
 - Verify MUL (CE D8) and DIV (CE D9)
 - Doublecheck behaviour of CMPN instructions ( CF 60 .. CF 63 )
-- DIV (CE D9) division by zero handling - is supposed to raise a EX4 exception. A real Pokemini unit will freeze. MAME currently will crash.
+- DIV (CE D9) division by zero handling - is supposed to raise a EX4 exception. A real Pokemini unit will freeze.
 
 */
 
 #include "emu.h"
 #include "minx.h"
 #include "minxd.h"
-#include "debugger.h"
 
 #define FLAG_I  0x80
 #define FLAG_D  0x40
@@ -206,13 +205,14 @@ void minx_cpu_device::execute_run()
 				/* Set Interrupt Branch flag */
 				m_F |= 0x80;
 				m_V = 0;
-				m_PC = rd16( standard_irq_callback( 0 ) << 1 );
+				m_PC = rd16( standard_irq_callback( 0, m_PC ) << 1 );
 				m_icount -= 28;     /* This cycle count is a guess */
 			}
 		}
 
 		if ( m_halted )
 		{
+			debugger_wait_hook();
 			m_icount -= insnminx_cycles_CE[0xAE];
 		}
 		else

@@ -23,36 +23,10 @@ u32 vax_disassembler::opcode_alignment() const
 	return 1;
 }
 
-enum class vax_disassembler::mode : u8
-{
-	none,
-	rb, srb, urb, cntb, rw, srw, urw, mskw, rl, srl, url, posl, prl, rq, srq, urq, ro, uro,
-	mb, mw, ml, mq, mo,
-	wb, ww, wl, wq, wo,
-	ab, aw, al, aq, ao,
-	bb, bw,
-	vb
-};
-
 namespace {
 
 using namespace std::literals;
 using mode = vax_disassembler::mode;
-
-static constexpr bool is_read_mode(mode m)
-{
-	switch (m)
-	{
-	case mode::rb: case mode::srb: case mode::urb: case mode::cntb:
-	case mode::rw: case mode::srw: case mode::urw: case mode::mskw:
-	case mode::rl: case mode::srl: case mode::url: case mode::posl: case mode::prl:
-	case mode::rq: case mode::urq:
-	case mode::ro: case mode::uro:
-		return true;
-	default:
-		return false;
-	}
-}
 
 static constexpr bool is_address_mode(mode m)
 {
@@ -355,20 +329,20 @@ static const vax_disassembler::opdef s_nonprefix_ops[0x100 - 3] =
 
 	{ "BSBB"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_OUT },
 	{ "BRB"sv,    { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BNEQ"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 }, // or BNEQU
-	{ "BEQL"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 }, // or BEQLU
-	{ "BGTR"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BLEQ"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
+	{ "BNEQ"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND }, // or BNEQU
+	{ "BEQL"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND }, // or BEQLU
+	{ "BGTR"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BLEQ"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
 	{ "JSB"sv,    { mode::ab,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_OVER },
 	{ "JMP"sv,    { mode::ab,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BGEQ"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BLSS"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BGTRU"sv,  { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BLEQU"sv,  { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BVC"sv,    { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BVS"sv,    { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BCC"sv,    { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 }, // or BGEQU
-	{ "BCS"sv,    { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 }, // or BLSSU
+	{ "BGEQ"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BLSS"sv,   { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BGTRU"sv,  { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BLEQU"sv,  { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BVC"sv,    { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BVS"sv,    { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BCC"sv,    { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND }, // or BGEQU
+	{ "BCS"sv,    { mode::bb,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND }, // or BLSSU
 
 	{ "ADDP4"sv,  { mode::rw,   mode::ab,   mode::rw,   mode::ab,   mode::none, mode::none }, 0 },
 	{ "ADDP6"sv,  { mode::rw,   mode::ab,   mode::rw,   mode::ab,   mode::rw,   mode::ab   }, 0 },
@@ -380,12 +354,12 @@ static const vax_disassembler::opdef s_nonprefix_ops[0x100 - 3] =
 	{ "DIVP"sv,   { mode::rw,   mode::ab,   mode::rw,   mode::ab,   mode::rw,   mode::ab   }, 0 },
 	{ "MOVC3"sv,  { mode::rw,   mode::ab,   mode::ab,   mode::none, mode::none, mode::none }, 0 },
 	{ "CMPC3"sv,  { mode::rw,   mode::ab,   mode::ab,   mode::none, mode::none, mode::none }, 0 },
-	{ "SCANC"sv,  { mode::rw,   mode::ab,   mode::ab,   mode::rb,   mode::none, mode::none }, 0 },
-	{ "SPANC"sv,  { mode::rw,   mode::ab,   mode::ab,   mode::rb,   mode::none, mode::none }, 0 },
-	{ "MOVC5"sv,  { mode::rw,   mode::ab,   mode::rb,   mode::rw,   mode::ab,   mode::none }, 0 },
-	{ "CMPC5"sv,  { mode::rw,   mode::ab,   mode::rb,   mode::rw,   mode::ab,   mode::none }, 0 },
-	{ "MOVTC"sv,  { mode::rw,   mode::ab,   mode::rb,   mode::ab,   mode::rw,   mode::ab   }, 0 },
-	{ "MOVTUC"sv, { mode::rw,   mode::ab,   mode::rb,   mode::ab,   mode::rw,   mode::ab   }, 0 },
+	{ "SCANC"sv,  { mode::rw,   mode::ab,   mode::ab,   mode::urb,  mode::none, mode::none }, 0 },
+	{ "SPANC"sv,  { mode::rw,   mode::ab,   mode::ab,   mode::urb,  mode::none, mode::none }, 0 },
+	{ "MOVC5"sv,  { mode::rw,   mode::ab,   mode::urb,  mode::rw,   mode::ab,   mode::none }, 0 },
+	{ "CMPC5"sv,  { mode::rw,   mode::ab,   mode::urb,  mode::rw,   mode::ab,   mode::none }, 0 },
+	{ "MOVTC"sv,  { mode::rw,   mode::ab,   mode::urb,  mode::ab,   mode::rw,   mode::ab   }, 0 },
+	{ "MOVTUC"sv, { mode::rw,   mode::ab,   mode::urb,  mode::ab,   mode::rw,   mode::ab   }, 0 },
 
 	{ "BSBW"sv,   { mode::bw,   mode::none, mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_OVER },
 	{ "BRW"sv,    { mode::bw,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
@@ -397,10 +371,10 @@ static const vax_disassembler::opdef s_nonprefix_ops[0x100 - 3] =
 	{ "CMPP4"sv,  { mode::rw,   mode::ab,   mode::rw,   mode::ab,   mode::none, mode::none }, 0 },
 	{ "EDITPC"sv, { mode::rw,   mode::ab,   mode::ab,   mode::ab,   mode::none, mode::none }, 0 },
 	{ "MATCHC"sv, { mode::rw,   mode::ab,   mode::rw,   mode::ab,   mode::none, mode::none }, 0 },
-	{ "LOCC"sv,   { mode::rb,   mode::rw,   mode::ab,   mode::none, mode::none, mode::none }, 0 },
-	{ "SKPC"sv,   { mode::rb,   mode::rw,   mode::ab,   mode::none, mode::none, mode::none }, 0 },
+	{ "LOCC"sv,   { mode::urb,  mode::rw,   mode::ab,   mode::none, mode::none, mode::none }, 0 },
+	{ "SKPC"sv,   { mode::urb,  mode::rw,   mode::ab,   mode::none, mode::none, mode::none }, 0 },
 	{ "MOVZWL"sv, { mode::rw,   mode::wl,   mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "ACBW"sv,   { mode::srw,  mode::srw,  mode::mw,   mode::bw,   mode::none, mode::none }, 0 },
+	{ "ACBW"sv,   { mode::srw,  mode::srw,  mode::mw,   mode::bw,   mode::none, mode::none }, vax_disassembler::STEP_COND },
 	{ "MOVAW"sv,  { mode::aw,   mode::wl,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "PUSHAW"sv, { mode::aw,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
 
@@ -419,7 +393,7 @@ static const vax_disassembler::opdef s_nonprefix_ops[0x100 - 3] =
 	{ "CVTBF"sv,  { mode::srb,  mode::wl,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CVTWF"sv,  { mode::srw,  mode::wl,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CVTLF"sv,  { mode::srl,  mode::wl,   mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "ACBF"sv,   { mode::rl,   mode::rl,   mode::ml,   mode::bw,   mode::none, mode::none }, 0 },
+	{ "ACBF"sv,   { mode::rl,   mode::rl,   mode::ml,   mode::bw,   mode::none, mode::none }, vax_disassembler::STEP_COND },
 
 	{ "MOVF"sv,   { mode::rl,   mode::wl,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CMPF"sv,   { mode::rl,   mode::rl,   mode::none, mode::none, mode::none, mode::none }, 0 },
@@ -453,7 +427,7 @@ static const vax_disassembler::opdef s_nonprefix_ops[0x100 - 3] =
 	{ "CVTBD"sv,  { mode::srb,  mode::wq,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CVTWD"sv,  { mode::srw,  mode::wq,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CVTLD"sv,  { mode::srl,  mode::wq,   mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "ACBD"sv,   { mode::rq,   mode::rq,   mode::mq,   mode::bw,   mode::none, mode::none }, 0 },
+	{ "ACBD"sv,   { mode::rq,   mode::rq,   mode::mq,   mode::bw,   mode::none, mode::none }, vax_disassembler::STEP_COND },
 
 	{ "MOVD"sv,   { mode::rq,   mode::wq,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CMPD"sv,   { mode::rq,   mode::rq,   mode::none, mode::none, mode::none, mode::none }, 0 },
@@ -502,7 +476,7 @@ static const vax_disassembler::opdef s_nonprefix_ops[0x100 - 3] =
 	{ "MOVZBL"sv, { mode::rb,   mode::wl,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "MOVZBW"sv, { mode::rb,   mode::ww,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "ROTL"sv,   { mode::cntb, mode::rl,   mode::wl,   mode::none, mode::none, mode::none }, 0 },
-	{ "ACBB"sv,   { mode::srb,  mode::srb,   mode::mb,   mode::bw,   mode::none, mode::none }, 0 },
+	{ "ACBB"sv,   { mode::srb,  mode::srb,  mode::mb,   mode::bw,   mode::none, mode::none }, vax_disassembler::STEP_COND },
 	{ "MOVAB"sv,  { mode::ab,   mode::wl,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "PUSHAB"sv, { mode::ab,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 },
 
@@ -574,16 +548,16 @@ static const vax_disassembler::opdef s_nonprefix_ops[0x100 - 3] =
 	{ "MOVAL"sv,  { mode::al,   mode::wl,   mode::none, mode::none, mode::none, mode::none }, 0 }, // or MOVAF
 	{ "PUSHAL"sv, { mode::al,   mode::none, mode::none, mode::none, mode::none, mode::none }, 0 }, // or PUSHAF
 
-	{ "BBS"sv,    { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "BBC"sv,    { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "BBSS"sv,   { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "BBCS"sv,   { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "BBSC"sv,   { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "BBCC"sv,   { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "BBSSI"sv,  { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "BBCCI"sv,  { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "BLBS"sv,   { mode::posl, mode::bb,   mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "BLBC"sv,   { mode::posl, mode::bb,   mode::none, mode::none, mode::none, mode::none }, 0 },
+	{ "BBS"sv,    { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BBC"sv,    { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BBSS"sv,   { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BBCS"sv,   { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BBSC"sv,   { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BBCC"sv,   { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BBSSI"sv,  { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BBCCI"sv,  { mode::posl, mode::vb,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BLBS"sv,   { mode::posl, mode::bb,   mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "BLBC"sv,   { mode::posl, mode::bb,   mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
 	{ "FFS"sv,    { mode::posl, mode::cntb, mode::vb,   mode::wl,   mode::none, mode::none }, 0 },
 	{ "FFC"sv,    { mode::posl, mode::cntb, mode::vb,   mode::wl,   mode::none, mode::none }, 0 },
 	{ "CMPV"sv,   { mode::posl, mode::cntb, mode::vb,   mode::rl,   mode::none, mode::none }, 0 },
@@ -592,11 +566,11 @@ static const vax_disassembler::opdef s_nonprefix_ops[0x100 - 3] =
 	{ "EXTZV"sv,  { mode::posl, mode::cntb, mode::vb,   mode::wl,   mode::none, mode::none }, 0 },
 
 	{ "INSV"sv,   { mode::rl,   mode::posl, mode::cntb, mode::vb,   mode::none, mode::none }, 0 },
-	{ "ACBL"sv,   { mode::srl,  mode::srl,  mode::ml,   mode::bw,   mode::none, mode::none }, 0 },
-	{ "AOBLSS"sv, { mode::srl,  mode::ml,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "AOBLEQ"sv, { mode::srl,  mode::ml,   mode::bb,   mode::none, mode::none, mode::none }, 0 },
-	{ "SOBGEQ"sv, { mode::ml,   mode::bb,   mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "SOBGTR"sv, { mode::ml,   mode::bb,   mode::none, mode::none, mode::none, mode::none }, 0 },
+	{ "ACBL"sv,   { mode::srl,  mode::srl,  mode::ml,   mode::bw,   mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "AOBLSS"sv, { mode::srl,  mode::ml,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "AOBLEQ"sv, { mode::srl,  mode::ml,   mode::bb,   mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "SOBGEQ"sv, { mode::ml,   mode::bb,   mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
+	{ "SOBGTR"sv, { mode::ml,   mode::bb,   mode::none, mode::none, mode::none, mode::none }, vax_disassembler::STEP_COND },
 	{ "CVTLB"sv,  { mode::srl,  mode::wb,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CVTLW"sv,  { mode::srl,  mode::ww,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "ASHP"sv,   { mode::cntb, mode::rw,   mode::ab,   mode::rb,   mode::rw,   mode::ab   }, 0 },
@@ -639,7 +613,7 @@ static const vax_disassembler::opdef s_fdprefix_ops[0x100 - 0x31] =
 	{ "CVTBG"sv,  { mode::srb,  mode::wq,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CVTWG"sv,  { mode::srw,  mode::wq,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CVTLG"sv,  { mode::srl,  mode::wq,   mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "ACBG"sv,   { mode::rq,   mode::rq,   mode::mq,   mode::bw,   mode::none, mode::none }, 0 },
+	{ "ACBG"sv,   { mode::rq,   mode::rq,   mode::mq,   mode::bw,   mode::none, mode::none }, vax_disassembler::STEP_COND },
 
 	{ "MOVG"sv,   { mode::rq,   mode::wq,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CMPG"sv,   { mode::rq,   mode::rq,   mode::none, mode::none, mode::none, mode::none }, 0 },
@@ -673,7 +647,7 @@ static const vax_disassembler::opdef s_fdprefix_ops[0x100 - 0x31] =
 	{ "CVTBH"sv,  { mode::srb,  mode::wo,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CVTWH"sv,  { mode::srw,  mode::wo,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CVTLH"sv,  { mode::srl,  mode::wo,   mode::none, mode::none, mode::none, mode::none }, 0 },
-	{ "ACBH"sv,   { mode::ro,   mode::ro,   mode::mq,   mode::bw,   mode::none, mode::none }, 0 },
+	{ "ACBH"sv,   { mode::ro,   mode::ro,   mode::mq,   mode::bw,   mode::none, mode::none }, vax_disassembler::STEP_COND },
 
 	{ "MOVH"sv,   { mode::ro,   mode::wo,   mode::none, mode::none, mode::none, mode::none }, 0 },
 	{ "CMPH"sv,   { mode::ro,   mode::ro,   mode::none, mode::none, mode::none, mode::none }, 0 },
@@ -963,6 +937,7 @@ offs_t vax_disassembler::disassemble_inst(std::ostream &stream, const vax_disass
 						break;
 
 					case mode::urb:
+					case mode::ab: // Immediate bytes may be used as MOVCn sources, at least with a length of 0
 						util::stream_format(stream, "#^X%02X", opcodes.r8(pc++));
 						break;
 
@@ -1024,7 +999,7 @@ offs_t vax_disassembler::disassemble_inst(std::ostream &stream, const vax_disass
 						break;
 
 					case mode::ro: case mode::uro:
-						util::stream_format(stream, "#^X%016X%016X", opcodes.r64(pc), opcodes.r64(pc + 4));
+						util::stream_format(stream, "#^X%016X%016X", opcodes.r64(pc + 8), opcodes.r64(pc));
 						pc += 16;
 						break;
 
@@ -1117,4 +1092,24 @@ offs_t vax_disassembler::disassemble(std::ostream &stream, offs_t pc, const vax_
 	}
 	else
 		return disassemble_inst(stream, s_nonprefix_ops[op], pc, ppc, opcodes);
+}
+
+bool vax_disassembler::is_read_mode(vax_disassembler::mode m)
+{
+	switch (m)
+	{
+	case mode::rb: case mode::srb: case mode::urb: case mode::cntb:
+	case mode::rw: case mode::srw: case mode::urw: case mode::mskw:
+	case mode::rl: case mode::srl: case mode::url: case mode::posl: case mode::prl:
+	case mode::rq: case mode::urq:
+	case mode::ro: case mode::uro:
+		return true;
+	default:
+		return false;
+	}
+}
+
+const vax_disassembler::mode *vax_disassembler::get_operands(u8 op)
+{
+	return s_nonprefix_ops[op].operand;
 }
