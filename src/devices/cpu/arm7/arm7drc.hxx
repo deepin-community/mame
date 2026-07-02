@@ -2,10 +2,10 @@
 // copyright-holders:Steve Ellenoff,R. Belmont,Ryan Holtz
 /*****************************************************************************
  *
- *   arm7drc.inc
+ *   arm7drc.hxx
  *   Portable CPU Emulator for 32-bit ARM v3/4/5/6
  *
- *   Copyright Steve Ellenoff, all rights reserved.
+ *   Copyright Steve Ellenoff
  *   Thumb, DSP, and MMU support and many bugfixes by R. Belmont and Ryan Holtz.
  *   Dyanmic Recompiler (DRC) / Just In Time Compiler (JIT) by Ryan Holtz.
  *
@@ -330,7 +330,7 @@ void arm7_cpu_device::code_compile_block(uint8_t mode, offs_t pc)
 	const opcode_desc *seqlast;
 	bool override = false;
 
-	g_profiler.start(PROFILER_DRC_COMPILE);
+	auto profile = g_profiler.start(PROFILER_DRC_COMPILE);
 
 	/* get a description of this sequence */
 	// TODO FIXME
@@ -418,7 +418,6 @@ void arm7_cpu_device::code_compile_block(uint8_t mode, offs_t pc)
 
 			/* end the sequence */
 			block.end();
-			g_profiler.stop();
 			succeeded = true;
 		}
 		catch (drcuml_block::abort_compilation &)

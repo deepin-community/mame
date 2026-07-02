@@ -2,10 +2,10 @@
 // copyright-holders:Steve Ellenoff,R. Belmont,Ryan Holtz
 /*****************************************************************************
  *
- *   arm7dasm.c
+ *   arm7dasm.h
  *   Portable ARM7TDMI Core Emulator - Disassembler
  *
- *   Copyright Steve Ellenoff, all rights reserved.
+ *   Copyright Steve Ellenoff
  *
  *  This work is based on:
  *  #1) 'Atmel Corporation ARM7TDMI (Thumb) Datasheet - January 1999'
@@ -39,8 +39,9 @@ private:
 	void DasmCoProc_RT(std::ostream &stream, u32 opcode, const char *pConditionCode, std::streampos start_position);
 	void DasmCoProc_DT(std::ostream &stream, u32 opcode, const char *pConditionCode, std::streampos start_position);
 	void DasmCoProc_DO(std::ostream &stream, u32 opcode, const char *pConditionCode, std::streampos start_position);
-	void WriteImmediateOperand( std::ostream &stream, u32 opcode );
-	void WriteDataProcessingOperand( std::ostream &stream, u32 opcode, int printOp0, int printOp1, int printOp2 );
+	static u32 ExtractImmediateOperand( u32 opcode );
+	void WriteShiftCount( std::ostream &stream, u32 opcode );
+	void WriteDataProcessingOperand( std::ostream &stream, u32 opcode, bool printOp0, bool printOp1 );
 	void WriteRegisterOperand1( std::ostream &stream, u32 opcode );
 	void WriteBranchAddress( std::ostream &stream, u32 pc, u32 opcode, bool h_bit );
 	u32 arm7_disasm( std::ostream &stream, u32 pc, u32 opcode );

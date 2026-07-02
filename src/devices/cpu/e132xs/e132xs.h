@@ -6,9 +6,11 @@
 #pragma once
 
 #include "32xsdasm.h"
+
 #include "cpu/drcfe.h"
 #include "cpu/drcuml.h"
 #include "cpu/drcumlsh.h"
+
 
 /*
     A note about clock multipliers and dividers:
@@ -128,12 +130,12 @@ public:
 	void compute_tr();
 	void adjust_timer_interrupt();
 
-	void e116_16k_iram_map(address_map &map);
-	void e116_4k_iram_map(address_map &map);
-	void e116_8k_iram_map(address_map &map);
-	void e132_16k_iram_map(address_map &map);
-	void e132_4k_iram_map(address_map &map);
-	void e132_8k_iram_map(address_map &map);
+	void e116_16k_iram_map(address_map &map) ATTR_COLD;
+	void e116_4k_iram_map(address_map &map) ATTR_COLD;
+	void e116_8k_iram_map(address_map &map) ATTR_COLD;
+	void e132_16k_iram_map(address_map &map) ATTR_COLD;
+	void e132_4k_iram_map(address_map &map) ATTR_COLD;
+	void e132_8k_iram_map(address_map &map) ATTR_COLD;
 
 	static uint32_t imm_length(uint16_t op);
 
@@ -279,14 +281,13 @@ protected:
 	void init(int scale_mask);
 
 	// device-level overrides
-	virtual void device_start() override;
-	virtual void device_reset() override;
-	virtual void device_stop() override;
+	virtual void device_start() override ATTR_COLD;
+	virtual void device_reset() override ATTR_COLD;
+	virtual void device_stop() override ATTR_COLD;
 
 	// device_execute_interface overrides
 	virtual uint32_t execute_min_cycles() const noexcept override;
 	virtual uint32_t execute_max_cycles() const noexcept override;
-	virtual uint32_t execute_input_lines() const noexcept override;
 	virtual void execute_run() override;
 	virtual void execute_set_input(int inputnum, int state) override;
 
@@ -337,6 +338,10 @@ private:
 
 	uint32_t get_global_register(uint8_t code);
 
+	// words interpreted as pairs of signed half-words (HS)
+	static int get_lhs(uint32_t val) { return int16_t(val & 0xffff); }
+	static int get_rhs(uint32_t val) { return int16_t(val >> 16); }
+
 	uint32_t get_emu_code_addr(uint8_t num);
 	int32_t get_instruction_length(uint16_t op);
 
@@ -353,6 +358,9 @@ private:
 	void execute_int(uint32_t addr);
 	void execute_exception(uint32_t addr);
 	void execute_software();
+
+	template <reg_bank DST_GLOBAL> uint64_t get_double_word(uint8_t dst_code, uint8_t dstf_code) const;
+	template <reg_bank DST_GLOBAL> void set_double_word(uint8_t dst_code, uint8_t dstf_code, uint64_t val);
 
 	template <reg_bank DST_GLOBAL, reg_bank SRC_GLOBAL> void hyperstone_chk();
 	template <reg_bank DST_GLOBAL, reg_bank SRC_GLOBAL> void hyperstone_movd();
@@ -482,8 +490,7 @@ private:
 	void static_generate_exception(uint32_t exception, const char *name);
 	void static_generate_memory_accessor(int size, int iswrite, bool isio, const char *name, uml::code_handle *&handleptr);
 	void static_generate_interrupt_checks();
-	void generate_interrupt_checks_no_timer(drcuml_block &block, uml::code_label &labelnum);
-	void generate_interrupt_checks_with_timer(drcuml_block &block, uml::code_label &labelnum);
+	void generate_interrupt_checks(drcuml_block &block, uml::code_label &labelnum, bool with_timer, int take_int, int take_timer);
 	void generate_branch(drcuml_block &block, uml::parameter targetpc, const opcode_desc *desc, bool update_cycles = true);
 	void generate_update_cycles(drcuml_block &block, bool check_interrupts = true);
 	void generate_checksum_block(drcuml_block &block, compiler_state &compiler, const opcode_desc *seqhead, const opcode_desc *seqlast);
@@ -491,21 +498,34 @@ private:
 	void log_add_disasm_comment(drcuml_block &block, uint32_t pc, uint32_t op);
 	bool generate_opcode(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
 
-	void generate_get_trap_addr(drcuml_block &block, uml::code_label &label, uint32_t trapno);
+	void generate_get_trap_addr(drcuml_block &block, uml::code_label &label, uml::parameter trapno);
 	void generate_check_delay_pc(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
-	void generate_decode_const(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
-	void generate_decode_immediate_s(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
+	uint32_t generate_get_const(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
+	uint32_t generate_get_immediate_s(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
 	void generate_ignore_immediate_s(drcuml_block &block, const opcode_desc *desc);
-	void generate_decode_pcrel(drcuml_block &block, const opcode_desc *desc);
+	uint32_t generate_get_pcrel(drcuml_block &block, const opcode_desc *desc);
 	void generate_ignore_pcrel(drcuml_block &block, const opcode_desc *desc);
 
 	void generate_get_global_register(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
 	void generate_set_global_register(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
+	void generate_set_global_register_low(drcuml_block &block, compiler_state &compiler, uint32_t dst_code, uml::parameter src);
+	void generate_set_global_register_high(drcuml_block &block, compiler_state &compiler, uint32_t dst_code, uml::parameter src);
 
-	template <trap_exception_or_int TYPE> void generate_trap_exception_or_int(drcuml_block &block);
+	void generate_load_operand(drcuml_block &block, compiler_state &compiler, reg_bank global, uint32_t code, uml::parameter dst, uml::parameter localidx);
+	void generate_load_src_addsub(drcuml_block &block, compiler_state &compiler, reg_bank global, uint32_t code, uml::parameter dst, uml::parameter localidx, uml::parameter sr);
+	void generate_set_dst(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc, reg_bank global, uint32_t code, uml::parameter src, uml::parameter localidx, bool calcidx);
+	void generate_update_flags_addsub(drcuml_block &block, compiler_state &compiler, uml::parameter sr);
+	void generate_update_flags_addsubc(drcuml_block &block, compiler_state &compiler, uml::parameter sr);
+	void generate_update_flags_addsubs(drcuml_block &block, compiler_state &compiler, uml::parameter sr);
+
+	template <trap_exception_or_int TYPE> void generate_trap_exception_or_int(drcuml_block &block, uml::code_label &label, uml::parameter trapno);
 	void generate_int(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc, uint32_t addr);
 	void generate_exception(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc, uint32_t addr);
 	void generate_software(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
+
+	void generate_trap_on_overflow(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
+	template <reg_bank DST_GLOBAL, reg_bank SRC_GLOBAL, typename T> void generate_logic_op(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc, T &&body);
+	template <reg_bank DST_GLOBAL, typename T> void generate_logic_op_imm(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc, uint32_t dst_code, T &&body);
 
 	template <reg_bank DST_GLOBAL, reg_bank SRC_GLOBAL> void generate_chk(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
 	template <reg_bank DST_GLOBAL, reg_bank SRC_GLOBAL> void generate_movd(drcuml_block &block, compiler_state &compiler, const opcode_desc *desc);
@@ -613,7 +633,7 @@ public:
 	e116t_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -626,7 +646,7 @@ public:
 	e116xt_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -639,7 +659,7 @@ public:
 	e116xs_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -652,7 +672,7 @@ public:
 	e116xsr_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -665,7 +685,7 @@ public:
 	e132n_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -678,7 +698,7 @@ public:
 	e132t_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -691,7 +711,7 @@ public:
 	e132xn_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -704,7 +724,7 @@ public:
 	e132xt_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -717,7 +737,7 @@ public:
 	e132xs_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -730,7 +750,7 @@ public:
 	e132xsr_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -743,7 +763,7 @@ public:
 	gms30c2116_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -756,7 +776,7 @@ public:
 	gms30c2132_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -769,7 +789,7 @@ public:
 	gms30c2216_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
@@ -782,7 +802,7 @@ public:
 	gms30c2232_device(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock);
 
 protected:
-	virtual void device_start() override;
+	virtual void device_start() override ATTR_COLD;
 };
 
 
