@@ -53,6 +53,7 @@ void osd_process_kill()
 	kill(getpid(), SIGKILL);
 }
 
+
 //============================================================
 //  osd_break_into_debugger
 //============================================================
@@ -68,36 +69,99 @@ void osd_break_into_debugger(const char *message)
 #endif
 }
 
+
+//============================================================
+//  osd_get_cache_line_size
+//============================================================
+
+std::pair<std::error_condition, unsigned> osd_get_cache_line_size() noexcept
+{
+#if defined(__linux__)
+	FILE *const f = std::fopen("/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size", "r");
+	if (!f)
+		return std::make_pair(std::error_condition(errno, std::generic_category()), 0U);
+
+	unsigned result = 0;
+	auto const cnt = std::fscanf(f, "%u", &result);
+	std::fclose(f);
+	if (1 == cnt)
+		return std::make_pair(std::error_condition(), result);
+	else
+		return std::make_pair(std::errc::io_error, 0U);
+#else // defined(__linux__)
+	return std::make_pair(std::errc::not_supported, 0U);
+#endif
+}
+
+
 #ifdef SDLMAME_ANDROID
-std::string osd_get_clipboard_text()
+std::string osd_get_clipboard_text() noexcept
 {
 	return std::string();
+}
+
+std::error_condition osd_set_clipboard_text(std::string_view text) noexcept
+{
+	return std::errc::io_error; // TODO: better error code?
 }
 #else
 //============================================================
 //  osd_get_clipboard_text
 //============================================================
 
-std::string osd_get_clipboard_text()
+std::string osd_get_clipboard_text() noexcept
 {
+	// TODO: better error handling
 	std::string result;
 
 	if (SDL_HasClipboardText())
 	{
-		char *temp = SDL_GetClipboardText();
-		result.assign(temp);
-		SDL_free(temp);
+		char *const temp = SDL_GetClipboardText();
+		if (temp)
+		{
+			try
+			{
+				result.assign(temp);
+			}
+			catch (std::bad_alloc const &)
+			{
+			}
+			SDL_free(temp);
+		}
 	}
 	return result;
 }
 
+
+//============================================================
+//  osd_set_clipboard_text
+//============================================================
+
+std::error_condition osd_set_clipboard_text(std::string_view text) noexcept
+{
+	try
+	{
+		std::string const clip(text); // need to do this to ensure there's a terminating NUL for SDL
+		if (0 > SDL_SetClipboardText(clip.c_str()))
+		{
+			// SDL_GetError returns a message, can't really convert it to an error condition
+			return std::errc::io_error; // TODO: better error code?
+		}
+
+		return std::error_condition();
+	}
+	catch (std::bad_alloc const &)
+	{
+		return std::errc::not_enough_memory;
+	}
+}
 #endif
 
 //============================================================
 //  osd_getpid
 //============================================================
 
-int osd_getpid()
+int osd_getpid() noexcept
 {
 	return getpid();
 }
@@ -161,7 +225,7 @@ private:
 } // anonymous namespace
 
 
-bool invalidate_instruction_cache(void const *start, std::size_t size)
+bool invalidate_instruction_cache(void const *start, std::size_t size) noexcept
 {
 #if !defined(SDLMAME_EMSCRIPTEN)
 	char const *const begin(reinterpret_cast<char const *>(start));
@@ -172,7 +236,7 @@ bool invalidate_instruction_cache(void const *start, std::size_t size)
 }
 
 
-void *virtual_memory_allocation::do_alloc(std::initializer_list<std::size_t> blocks, unsigned intent, std::size_t &size, std::size_t &page_size)
+void *virtual_memory_allocation::do_alloc(std::initializer_list<std::size_t> blocks, unsigned intent, std::size_t &size, std::size_t &page_size) noexcept
 {
 	long const p(sysconf(_SC_PAGE_SIZE));
 	if (0 >= p)
@@ -209,12 +273,12 @@ void *virtual_memory_allocation::do_alloc(std::initializer_list<std::size_t> blo
 	return result;
 }
 
-void virtual_memory_allocation::do_free(void *start, std::size_t size)
+void virtual_memory_allocation::do_free(void *start, std::size_t size) noexcept
 {
 	munmap(reinterpret_cast<char *>(start), size);
 }
 
-bool virtual_memory_allocation::do_set_access(void *start, std::size_t size, unsigned access)
+bool virtual_memory_allocation::do_set_access(void *start, std::size_t size, unsigned access) noexcept
 {
 	int prot((NONE == access) ? PROT_NONE : 0);
 	if (access & READ)
